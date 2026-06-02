@@ -1,7 +1,7 @@
 import { ConflictException, Injectable, UnauthorizedException } from '@nestjs/common';
 import { JwtService } from '@nestjs/jwt';
 import { ConfigService } from '@nestjs/config';
-import * as bcrypt from 'bcrypt';
+import * as bcrypt from 'bcryptjs';
 import { PrismaService } from '../database/prisma.service';
 import { RedisService } from '../redis/redis.service';
 import { RegisterDto } from './dto/register.dto';
@@ -15,7 +15,7 @@ export class AuthService {
     private redis: RedisService,
     private jwtService: JwtService,
     private configService: ConfigService
-  ) {}
+  ) { }
 
   async register(dto: RegisterDto): Promise<IAuthResponse> {
     const existingUser = await this.prisma.user.findUnique({
