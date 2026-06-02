@@ -59,7 +59,7 @@ export class AuthController {
   }
 
   @UseGuards(JwtAuthGuard, RolesGuard)
-  @Roles(UserRole.ADMIN, UserRole.SUPER_ADMIN)
+  @Roles(UserRole.AGENCY_OWNER, UserRole.SUPER_ADMIN)
   @Get('admin-only')
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Admin only route (RBAC test)' })
