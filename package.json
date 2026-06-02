@@ -1,11 +1,12 @@
 {
-  "name": "agency-saas-frontend",
-  "version": "0.1.0",
+  "name": "billing-software-monorepo",
+  "version": "1.0.0",
   "private": true,
+  "description": "Enterprise SaaS Billing Software Monorepo",
   "scripts": {
-    "dev": "next dev",
-    "build": "next build",
-    "start": "next start",
+    "build": "pnpm --recursive run build",
+    "dev": "pnpm --recursive --parallel run dev",
+    "test": "pnpm --recursive run test",
     "lint": "eslint"
   },
   "dependencies": {
@@ -25,6 +26,16 @@
     "eslint": "^9",
     "eslint-config-next": "16.2.7",
     "tailwindcss": "^4",
-    "typescript": "^5"
+    "typescript": "^5.3.3"
+  },
+  "pnpm": {
+    "onlyBuiltDependencies": [
+      "@prisma/client",
+      "prisma",
+      "@prisma/engines",
+      "bcrypt",
+      "@nestjs/core",
+      "@nestjs/common"
+    ]
   }
 }
