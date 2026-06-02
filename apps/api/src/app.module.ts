@@ -5,6 +5,7 @@ import { validate } from './config/env.validation';
 import { DatabaseModule } from './database/database.module';
 import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './auth/auth.module';
+import { CrmModule } from './crm/crm.module';
 
 @Module({
   imports: [
@@ -22,6 +23,7 @@ import { AuthModule } from './auth/auth.module';
     DatabaseModule,
     RedisModule,
     AuthModule,
+    CrmModule,
   ],
 })
 export class AppModule {}

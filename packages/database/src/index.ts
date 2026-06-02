@@ -1,1 +1,1 @@
-export { PrismaClient, User, Tenant } from '@prisma/client';
+export { PrismaClient, User, Tenant, Company, Contact, Pipeline, Stage, Deal, Activity, Note } from '@prisma/client';
