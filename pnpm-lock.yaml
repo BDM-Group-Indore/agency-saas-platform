@@ -140,7 +140,7 @@ importers:
         version: 3.6.0
       zustand:
         specifier: ^5.0.14
-        version: 5.0.14(@types/react@19.2.16)(react@19.2.4)
+        version: 5.0.14(@types/react@19.2.15)(react@19.2.4)
     devDependencies:
       '@tailwindcss/postcss':
         specifier: ^4
@@ -150,10 +150,10 @@ importers:
         version: 20.19.41
       '@types/react':
         specifier: ^19
-        version: 19.2.16
+        version: 19.2.15
       '@types/react-dom':
         specifier: ^19
-        version: 19.2.3(@types/react@19.2.16)
+        version: 19.2.3(@types/react@19.2.15)
       eslint:
         specifier: ^9
         version: 9.39.4(jiti@2.7.0)
@@ -1211,8 +1211,8 @@ packages:
     peerDependencies:
       '@types/react': ^19.2.0
 
-  '@types/react@19.2.16':
-    resolution: {integrity: sha512-esJiCAnl0kfpNdE69f3So4WJUXy95dLZydX0KwK46riIHDzHM7O9Vtf9xCHW0PXIqvgqNrswl522kA/5yx+F4w==}
+  '@types/react@19.2.15':
+    resolution: {integrity: sha512-eRwcGNHve+E8qtEQSSRl6urh+rFop4v8gm6O8rGv25CodbvFdLjA1vVQ1KkiFE0w0UPOnb8tDiFKL5lp0rtY5Q==}
 
   '@types/send@0.17.6':
     resolution: {integrity: sha512-Uqt8rPBE8SY0RK8JB1EzVOIZ32uqy8HwdxCnoCOsYrvnswqmFZ/k+9Ikidlk/ImhsdvBsloHbAlewb2IEBV/Og==}
@@ -5644,11 +5644,11 @@ snapshots:
 
   '@types/range-parser@1.2.7': {}
 
-  '@types/react-dom@19.2.3(@types/react@19.2.16)':
+  '@types/react-dom@19.2.3(@types/react@19.2.15)':
     dependencies:
-      '@types/react': 19.2.16
+      '@types/react': 19.2.15
 
-  '@types/react@19.2.16':
+  '@types/react@19.2.15':
     dependencies:
       csstype: 3.2.3
 
@@ -9470,7 +9470,7 @@ snapshots:
 
   zod@4.4.3: {}
 
-  zustand@5.0.14(@types/react@19.2.16)(react@19.2.4):
+  zustand@5.0.14(@types/react@19.2.15)(react@19.2.4):
     optionalDependencies:
-      '@types/react': 19.2.16
+      '@types/react': 19.2.15
       react: 19.2.4
