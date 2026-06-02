@@ -6,6 +6,7 @@
   "scripts": {
     "build": "pnpm --recursive run build",
     "dev": "pnpm --recursive --parallel run dev",
+    "phase1": "pnpm dev",
     "test": "pnpm --recursive run test",
     "lint": "eslint"
   },
