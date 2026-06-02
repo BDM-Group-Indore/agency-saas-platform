@@ -22,7 +22,7 @@ model User {
   password     String
   firstName    String?
   lastName     String?
-  role         String   @default("USER") // SUPER_ADMIN, ADMIN, USER
+  role         String   @default("CLIENT") // SUPER_ADMIN, AGENCY_OWNER, MANAGER, SALES, SUPPORT, CLIENT
   isActive     Boolean  @default(true)
   tokenVersion Int      @default(0)
   tenantId     String?

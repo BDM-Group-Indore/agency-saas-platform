@@ -40,13 +40,21 @@ export class AuthService {
         tenantId = tenant.id;
       }
 
+      let userRole: UserRole = UserRole.CLIENT;
+      if (dto.role) {
+        const normalized = dto.role.toUpperCase().replace(/\s+/g, '_') as UserRole;
+        if (Object.values(UserRole).includes(normalized)) {
+          userRole = normalized;
+        }
+      }
+
       const user = await tx.user.create({
         data: {
           email: dto.email,
           password: hashedPassword,
           firstName: dto.firstName,
           lastName: dto.lastName,
-          role: dto.role || UserRole.USER,
+          role: userRole,
           tenantId,
         },
       });
