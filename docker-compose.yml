@@ -66,6 +66,8 @@ services:
       JWT_ACCESS_EXPIRATION: ${JWT_ACCESS_EXPIRATION:-15m}
       JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-super-secret-refresh-key-change-in-prod}
       JWT_REFRESH_EXPIRATION: ${JWT_REFRESH_EXPIRATION:-7d}
+    ports:
+      - "${API_PORT:-3001}:3000"
     depends_on:
       postgres:
         condition: service_healthy
@@ -84,6 +86,8 @@ services:
     environment:
       NODE_ENV: production
       PORT: 3000
+    ports:
+      - "${FRONTEND_PORT:-3002}:3000"
     depends_on:
       - api
 
