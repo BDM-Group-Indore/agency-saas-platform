@@ -1,32 +1,38 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, StatsCard } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
-import { Modal, ConfirmationModal } from '@/components/ui/Modal';
+import { Modal } from '@/components/ui/Modal';
 import { Input } from '@/components/ui/Input';
 import { Network, Plus, DollarSign, Sparkles, Milestone, Calendar, User, Trash2, HelpCircle } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { apiRequest } from '@/lib/api';
 
 interface Deal {
   id: string;
   companyName: string;
   dealName: string;
-  stage: 'Proposal' | 'Negotiation' | 'Contract Sent' | 'Closed Won';
+  stage: string;
+  stageId: string;
   amount: number;
   owner: string;
   closeDate: string;
 }
 
-export default function CRMPage() {
-  const [deals, setDeals] = useState<Deal[]>([
-    { id: 'D-201', companyName: 'Nexon Digital Corp', dealName: 'Enterprise SEO & SEM retainer', stage: 'Proposal', amount: 8500, owner: 'Shivam Gupta', closeDate: '2026-06-15' },
-    { id: 'D-202', companyName: 'Apex Health Ltd', dealName: 'Lead Generation Campaign Setup', stage: 'Negotiation', amount: 4500, owner: 'Shivam Gupta', closeDate: '2026-06-18' },
-    { id: 'D-203', companyName: 'Elite Real Estate', dealName: 'Meta Ads Retainer Q3', stage: 'Contract Sent', amount: 12000, owner: 'Amit Kumar', closeDate: '2026-06-25' },
-    { id: 'D-204', companyName: 'Zetta E-learning', dealName: 'Growth Strategy Consulting', stage: 'Closed Won', amount: 6000, owner: 'Sneha Rao', closeDate: '2026-05-29' },
-  ]);
+interface Stage {
+  id: string;
+  name: string;
+  order: number;
+  deals: any[];
+}
 
-  const stages: Deal['stage'][] = ['Proposal', 'Negotiation', 'Contract Sent', 'Closed Won'];
+export default function CRMPage() {
+  const [pipelineId, setPipelineId] = useState<string>('');
+  const [stages, setStages] = useState<Stage[]>([]);
+  const [dbCompanies, setDbCompanies] = useState<{ id: string; name: string }[]>([]);
+  const [dbContacts, setDbContacts] = useState<{ id: string; firstName: string; lastName: string }[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   // Drag and Drop State Management
   const [draggedDealId, setDraggedDealId] = useState<string | null>(null);
@@ -38,11 +44,43 @@ export default function CRMPage() {
   const [isDetailsOpen, setIsDetailsOpen] = useState(false);
 
   // Add Deal form states
-  const [newCompanyName, setNewCompanyName] = useState('');
   const [newDealName, setNewDealName] = useState('');
   const [newAmount, setNewAmount] = useState('5000');
-  const [newStage, setNewStage] = useState<Deal['stage']>('Proposal');
+  const [newStageId, setNewStageId] = useState('');
+  const [selectedCompanyId, setSelectedCompanyId] = useState('');
+  const [selectedContactId, setSelectedContactId] = useState('');
   const [newCloseDate, setNewCloseDate] = useState('2026-06-30');
+
+  const fetchPipelineData = async () => {
+    try {
+      setIsLoading(true);
+      const [pipelinesRes, companiesRes, contactsRes] = await Promise.all([
+        apiRequest('/pipelines'),
+        apiRequest('/companies?limit=100'),
+        apiRequest('/contacts?limit=100'),
+      ]);
+
+      setDbCompanies(companiesRes.data || []);
+      setDbContacts(contactsRes.data || []);
+
+      const activePipeline = pipelinesRes[0];
+      if (activePipeline) {
+        setPipelineId(activePipeline.id);
+        setStages(activePipeline.stages || []);
+        if (activePipeline.stages && activePipeline.stages.length > 0 && !newStageId) {
+          setNewStageId(activePipeline.stages[0].id);
+        }
+      }
+    } catch (err: any) {
+      console.error('Failed to load CRM pipeline board:', err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchPipelineData();
+  }, []);
 
   // Drag and Drop Event Handlers
   const handleDragStart = (e: React.DragEvent, id: string) => {
@@ -56,69 +94,80 @@ export default function CRMPage() {
     setActiveColumn(null);
   };
 
-  const handleDragOver = (e: React.DragEvent, stage: string) => {
+  const handleDragOver = (e: React.DragEvent, stageId: string) => {
     e.preventDefault();
-    if (activeColumn !== stage) {
-      setActiveColumn(stage);
+    if (activeColumn !== stageId) {
+      setActiveColumn(stageId);
     }
   };
 
-  const handleDrop = (e: React.DragEvent, targetStage: Deal['stage']) => {
+  const handleDrop = async (e: React.DragEvent, targetStageId: string) => {
     e.preventDefault();
     const id = e.dataTransfer.getData('text/plain') || draggedDealId;
     if (!id) return;
 
-    // Update the stage of the dragged card
-    setDeals((prevDeals) =>
-      prevDeals.map((deal) =>
-        deal.id === id ? { ...deal, stage: targetStage } : deal
-      )
-    );
-
-    // If a deal is dragged to "Closed Won", push a console celebration
-    if (targetStage === 'Closed Won') {
-      console.log(`🎉 Closed Won Deal Milestone Reached for deal ID ${id}!`);
+    try {
+      await apiRequest(`/deals/${id}`, {
+        method: 'PATCH',
+        body: JSON.stringify({ stageId: targetStageId }),
+      });
+      await fetchPipelineData();
+    } catch (err: any) {
+      alert('Failed to move deal: ' + err.message);
     }
 
     setDraggedDealId(null);
     setActiveColumn(null);
   };
 
-  const handleAddDeal = (e: React.FormEvent) => {
+  const handleAddDeal = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!newCompanyName || !newDealName) return;
+    if (!newDealName || !newStageId) return;
 
-    const newDeal: Deal = {
-      id: `D-${200 + deals.length + 1}`,
-      companyName: newCompanyName,
-      dealName: newDealName,
-      stage: newStage,
-      amount: Number(newAmount) || 1000,
+    try {
+      const payload = {
+        title: newDealName,
+        value: Number(newAmount) || 0,
+        stageId: newStageId,
+        companyId: selectedCompanyId || undefined,
+        contactId: selectedContactId || undefined,
+      };
+
+      await apiRequest('/deals', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      setIsAddOpen(false);
+      await fetchPipelineData();
+
+      // Reset Form
+      setNewDealName('');
+      setNewAmount('5000');
+      setSelectedCompanyId('');
+      setSelectedContactId('');
+      setNewCloseDate('2026-06-30');
+    } catch (err: any) {
+      alert('Error creating deal: ' + err.message);
+    }
+  };
+
+  // Calculations
+  const allDeals = stages.flatMap((s) =>
+    (s.deals || []).map((d) => ({
+      id: d.id,
+      companyName: d.company?.name || 'Independent Account',
+      dealName: d.title,
+      stage: s.name,
+      stageId: s.id,
+      amount: d.value || 0,
       owner: 'Shivam Gupta',
-      closeDate: newCloseDate || '2026-06-30',
-    };
+      closeDate: d.createdAt ? new Date(d.createdAt).toISOString().split('T')[0] : '2026-06-30',
+    }))
+  );
 
-    setDeals([...deals, newDeal]);
-    setIsAddOpen(false);
-
-    // Reset Form
-    setNewCompanyName('');
-    setNewDealName('');
-    setNewAmount('5000');
-    setNewStage('Proposal');
-    setNewCloseDate('2026-06-30');
-  };
-
-  const getDealsByStage = (stage: Deal['stage']) => {
-    return deals.filter((d) => d.stage === stage);
-  };
-
-  const calculateTotalInStage = (stage: Deal['stage']) => {
-    return getDealsByStage(stage).reduce((acc, curr) => acc + curr.amount, 0);
-  };
-
-  const totalPipelineVal = deals.reduce((acc, curr) => acc + curr.amount, 0);
-  const closedWonVal = getDealsByStage('Closed Won').reduce((acc, curr) => acc + curr.amount, 0);
+  const totalPipelineVal = allDeals.reduce((acc, curr) => acc + curr.amount, 0);
+  const closedWonVal = allDeals.filter((d) => d.stage === 'Closed Won').reduce((acc, curr) => acc + curr.amount, 0);
 
   return (
     <div className="flex flex-col gap-6">
@@ -134,9 +183,6 @@ export default function CRMPage() {
           </p>
         </div>
         <div className="flex items-center gap-2">
-          <Button variant="outline" size="sm">
-            <Milestone className="w-3.5 h-3.5 mr-1.5" /> Customize Stages
-          </Button>
           <Button variant="primary" size="sm" onClick={() => setIsAddOpen(true)}>
             <Plus className="w-3.5 h-3.5 mr-1.5" /> Add New Deal
           </Button>
@@ -146,27 +192,36 @@ export default function CRMPage() {
       {/* CRM Stats Banner */}
       <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
         <StatsCard title="Total Pipeline Value" value={`$${totalPipelineVal.toLocaleString()}`} icon={<DollarSign className="w-5 h-5 text-indigo-500" />} subtitle="Active sales pipeline" />
-        <StatsCard title="Closed Won Deals" value={`$${closedWonVal.toLocaleString()}`} icon={<Sparkles className="w-5 h-5 text-amber-500" />} trend={{ value: 18.4, isPositive: true }} subtitle="vs last 30 days" />
-        <StatsCard title="Pipeline Growth" value="+24%" icon={<Network className="w-5 h-5 text-emerald-500" />} subtitle="Active contacts indexed" />
+        <StatsCard title="Closed Won Deals" value={`$${closedWonVal.toLocaleString()}`} icon={<Sparkles className="w-5 h-5 text-amber-500" />} subtitle="Platform closure metric" />
+        <StatsCard title="Pipeline Growth" value={`+${allDeals.length}`} icon={<Network className="w-5 h-5 text-emerald-500" />} subtitle="Active deals tracker" />
       </div>
 
       {/* Interactive Kanban Board Grid */}
-      <div className="grid grid-cols-1 md:grid-cols-4 gap-4 mt-2">
+      <div className="grid grid-cols-1 md:grid-cols-4 lg:grid-cols-7 gap-4 mt-2 overflow-x-auto pb-4">
         {stages.map((stage) => {
-          const stageDeals = getDealsByStage(stage);
-          const totalVal = calculateTotalInStage(stage);
-          const isOver = activeColumn === stage;
+          const stageDeals = (stage.deals || []).map((d) => ({
+            id: d.id,
+            companyName: d.company?.name || 'Independent Account',
+            dealName: d.title,
+            stage: stage.name,
+            stageId: stage.id,
+            amount: d.value || 0,
+            owner: 'Shivam Gupta',
+            closeDate: d.createdAt ? new Date(d.createdAt).toISOString().split('T')[0] : '2026-06-30',
+          }));
+          const totalVal = stageDeals.reduce((acc, curr) => acc + curr.amount, 0);
+          const isOver = activeColumn === stage.id;
 
           return (
             <div
-              key={stage}
-              onDragOver={(e) => handleDragOver(e, stage)}
-              onDrop={(e) => handleDrop(e, stage)}
+              key={stage.id}
+              onDragOver={(e) => handleDragOver(e, stage.id)}
+              onDrop={(e) => handleDrop(e, stage.id)}
               className={cn(
-                'flex flex-col gap-3.5 bg-slate-100/50 dark:bg-dark-card/45 border border-slate-200 dark:border-dark-border p-4 rounded-2xl relative transition-all duration-300 min-h-[450px]',
+                'flex flex-col gap-3.5 bg-slate-100/50 dark:bg-dark-card/45 border border-slate-200 dark:border-dark-border p-4 rounded-2xl relative transition-all duration-300 min-w-[220px] min-h-[450px]',
                 {
                   'bg-primary/5 border-primary/40 shadow-lg scale-[1.01]': isOver,
-                  'border-emerald-500/30 bg-emerald-500/5': isOver && stage === 'Closed Won',
+                  'border-emerald-500/30 bg-emerald-500/5': isOver && stage.name === 'Closed Won',
                 }
               )}
             >
@@ -176,13 +231,16 @@ export default function CRMPage() {
                   <span className={cn(
                     'w-2.5 h-2.5 rounded-full',
                     {
-                      'bg-indigo-500': stage === 'Proposal',
-                      'bg-cyan-500': stage === 'Negotiation',
-                      'bg-amber-500': stage === 'Contract Sent',
-                      'bg-emerald-500': stage === 'Closed Won',
+                      'bg-indigo-500': stage.name === 'Lead In',
+                      'bg-cyan-500': stage.name === 'Contact Made',
+                      'bg-amber-500': stage.name === 'Demo Scheduled' || stage.name === 'Proposal Sent',
+                      'bg-emerald-500': stage.name === 'Closed Won',
+                      'bg-slate-400': stage.name === 'Closed Lost',
                     }
                   )} />
-                  <span className="text-xs font-extrabold text-slate-900 dark:text-slate-50 uppercase tracking-wider">{stage}</span>
+                  <span className="text-[10px] font-extrabold text-slate-900 dark:text-slate-50 uppercase tracking-wider truncate max-w-[120px]" title={stage.name}>
+                    {stage.name}
+                  </span>
                 </div>
                 <span className="text-[10px] font-mono bg-slate-200 dark:bg-slate-800 text-slate-700 dark:text-slate-400 px-2 py-0.5 rounded-full font-bold">
                   {stageDeals.length}
@@ -190,7 +248,7 @@ export default function CRMPage() {
               </div>
               
               <div className="text-[10px] text-slate-400 font-semibold flex justify-between px-1 shrink-0">
-                <span>VALUATION:</span>
+                <span>VAL:</span>
                 <span className="text-slate-900 dark:text-slate-200 font-bold">${totalVal.toLocaleString()}</span>
               </div>
 
@@ -213,10 +271,10 @@ export default function CRMPage() {
                       )}
                     >
                       <div className="flex flex-col gap-1.5">
-                        <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider">
+                        <span className="text-[9px] font-extrabold text-slate-400 uppercase tracking-wider truncate">
                           {deal.companyName}
                         </span>
-                        <h4 className="text-xs font-bold text-slate-800 dark:text-slate-50 group-hover:text-primary transition-colors leading-snug">
+                        <h4 className="text-xs font-bold text-slate-800 dark:text-slate-50 group-hover:text-primary transition-colors leading-snug truncate">
                           {deal.dealName}
                         </h4>
                         
@@ -224,16 +282,16 @@ export default function CRMPage() {
                           <span className="font-bold text-slate-900 dark:text-white">
                             ${deal.amount.toLocaleString()}
                           </span>
-                          <span className="flex items-center gap-1">
-                            <Calendar className="w-3 h-3" /> {deal.closeDate.split('-').slice(1).join('/')}
+                          <span className="flex items-center gap-1 text-[9px]">
+                            <Calendar className="w-2.5 h-2.5" /> {deal.closeDate.split('-').slice(1).join('/')}
                           </span>
                         </div>
                       </div>
                     </div>
                   ))
                 ) : (
-                  <div className="h-44 rounded-xl border border-dashed border-slate-300 dark:border-slate-800/80 flex items-center justify-center text-[10px] text-slate-400 text-center p-4 leading-relaxed flex-1">
-                    Drag and drop deal cards here to transition stage
+                  <div className="h-28 rounded-xl border border-dashed border-slate-300 dark:border-slate-800/80 flex items-center justify-center text-[9px] text-slate-400 text-center p-3 leading-relaxed flex-1">
+                    Drag deal cards here
                   </div>
                 )}
               </div>
@@ -255,22 +313,50 @@ export default function CRMPage() {
         }
       >
         <form onSubmit={handleAddDeal} className="flex flex-col gap-4">
-          <Input label="B2B Company Account" placeholder="e.g. Nexon Digital Corp" value={newCompanyName} onChange={(e) => setNewCompanyName(e.target.value)} required />
           <Input label="Deal Name / Scope" placeholder="e.g. Enterprise SEO Retainer" value={newDealName} onChange={(e) => setNewDealName(e.target.value)} required />
           <Input label="Deal Contract Amount ($)" type="number" placeholder="5000" value={newAmount} onChange={(e) => setNewAmount(e.target.value)} />
+          
           <div className="flex flex-col gap-1.5">
-            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Pipeline Stage</label>
+            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Pipeline Column Stage</label>
             <select
-              value={newStage}
-              onChange={(e) => setNewStage(e.target.value as any)}
+              value={newStageId}
+              onChange={(e) => setNewStageId(e.target.value)}
               className="w-full text-sm rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-card text-slate-900 dark:text-slate-100 p-2.5 focus:outline-none"
             >
-              <option value="Proposal">Proposal</option>
-              <option value="Negotiation">Negotiation</option>
-              <option value="Contract Sent">Contract Sent</option>
-              <option value="Closed Won">Closed Won</option>
+              {stages.map((s) => (
+                <option key={s.id} value={s.id}>{s.name}</option>
+              ))}
             </select>
           </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Client B2B Account</label>
+            <select
+              value={selectedCompanyId}
+              onChange={(e) => setSelectedCompanyId(e.target.value)}
+              className="w-full text-sm rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-card text-slate-900 dark:text-slate-100 p-2.5 focus:outline-none"
+            >
+              <option value="">Independent (No Company)</option>
+              {dbCompanies.map((c) => (
+                <option key={c.id} value={c.id}>{c.name}</option>
+              ))}
+            </select>
+          </div>
+
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Primary Lead Contact</label>
+            <select
+              value={selectedContactId}
+              onChange={(e) => setSelectedContactId(e.target.value)}
+              className="w-full text-sm rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-card text-slate-900 dark:text-slate-100 p-2.5 focus:outline-none"
+            >
+              <option value="">Unassigned (No Contact)</option>
+              {dbContacts.map((c) => (
+                <option key={c.id} value={c.id}>{c.firstName} {c.lastName || ''}</option>
+              ))}
+            </select>
+          </div>
+
           <Input label="Expected Close Date" type="date" value={newCloseDate} onChange={(e) => setNewCloseDate(e.target.value)} />
         </form>
       </Modal>
@@ -293,15 +379,7 @@ export default function CRMPage() {
                 <span className="text-sm font-bold text-slate-900 dark:text-white">{selectedDeal.dealName}</span>
                 <span className="text-slate-400">Deal Card ID: {selectedDeal.id}</span>
               </div>
-              <span className={cn(
-                'px-2.5 py-0.5 rounded-full text-white font-bold uppercase text-[10px]',
-                {
-                  'bg-indigo-500': selectedDeal.stage === 'Proposal',
-                  'bg-cyan-500': selectedDeal.stage === 'Negotiation',
-                  'bg-amber-500': selectedDeal.stage === 'Contract Sent',
-                  'bg-emerald-500': selectedDeal.stage === 'Closed Won',
-                }
-              )}>
+              <span className="px-2.5 py-0.5 rounded-full bg-primary text-white font-bold uppercase text-[10px]">
                 {selectedDeal.stage}
               </span>
             </div>
@@ -328,7 +406,7 @@ export default function CRMPage() {
             <div className="mt-2 bg-slate-50 dark:bg-slate-800/40 p-3 rounded-xl border border-slate-100 dark:border-slate-800">
               <span className="font-bold text-slate-900 dark:text-slate-100 block mb-1">Pipeline Card assessment:</span>
               <p className="text-slate-500 dark:text-slate-400 leading-normal">
-                Card can be dragged between pipeline columns on the board to reflect real-time negotiation statuses. All stage values and column counts will recalculate automatically in the parent cockpit workspace.
+                Card can be dragged between pipeline columns on the board to reflect real-time negotiation statuses. All stage values and column counts will recalculate automatically.
               </p>
             </div>
           </div>

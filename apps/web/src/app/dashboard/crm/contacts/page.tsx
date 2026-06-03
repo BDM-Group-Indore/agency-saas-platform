@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, StatsCard } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Modal, ConfirmationModal } from '@/components/ui/Modal';
 import { UserCheck, Trash2, Edit3, ExternalLink, Plus, Search, Mail, Phone, Briefcase, HeartHandshake, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { apiRequest } from '@/lib/api';
 
 interface Contact {
   id: string;
@@ -21,13 +22,9 @@ interface Contact {
 }
 
 export default function ContactsPage() {
-  const [contacts, setContacts] = useState<Contact[]>([
-    { id: 'CON-01', name: 'Abhishek Kumar', email: 'abhishek@nexon.com', phone: '+91 98765 43210', company: 'Nexon Digital Corp', dealValue: 8500, status: 'Proposal', owner: 'Shivam Gupta', lastActivity: '2 hours ago' },
-    { id: 'CON-02', name: 'Amit Jain', email: 'amit@apex.com', phone: '+91 98123 45678', company: 'Apex Health Ltd', dealValue: 4500, status: 'Negotiation', owner: 'Shivam Gupta', lastActivity: '1 day ago' },
-    { id: 'CON-03', name: 'Sanjay Sharma', email: 'sanjay@elite.com', phone: '+91 97654 32109', company: 'Elite Real Estate', dealValue: 12000, status: 'Proposal', owner: 'Amit Kumar', lastActivity: '30 mins ago' },
-    { id: 'CON-04', name: 'Neha Rao', email: 'neha@zetta.com', phone: '+91 99887 76655', company: 'Zetta E-learning', dealValue: 6000, status: 'Closed Won', owner: 'Sneha Rao', lastActivity: '5 days ago' },
-    { id: 'CON-05', name: 'Rohan Mehta', email: 'rohan@kross.com', phone: '+91 91234 56789', company: 'Kross Clothing', dealValue: 0, status: 'Closed Lost', owner: 'Unassigned', lastActivity: '1 week ago' },
-  ]);
+  const [contacts, setContacts] = useState<Contact[]>([]);
+  const [dbCompanies, setDbCompanies] = useState<{ id: string; name: string }[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('All');
@@ -42,40 +39,105 @@ export default function ContactsPage() {
   const [newName, setNewName] = useState('');
   const [newEmail, setNewEmail] = useState('');
   const [newPhone, setNewPhone] = useState('');
-  const [newCompany, setNewCompany] = useState('');
+  const [newCompanyId, setNewCompanyId] = useState('');
   const [newValue, setNewValue] = useState('5000');
   const [newStatus, setNewStatus] = useState<'Lead' | 'Contacted' | 'Proposal' | 'Negotiation' | 'Closed Won'>('Lead');
 
-  const handleAddContact = (e: React.FormEvent) => {
+  const fetchData = async () => {
+    try {
+      setIsLoading(true);
+      const [contactsRes, companiesRes] = await Promise.all([
+        apiRequest(`/contacts?limit=100&search=${search}`),
+        apiRequest('/companies?limit=100'),
+      ]);
+
+      setDbCompanies(companiesRes.data || []);
+
+      const mappedContacts = (contactsRes.data || []).map((c: any) => ({
+        id: c.id,
+        name: `${c.firstName} ${c.lastName || ''}`.trim(),
+        email: c.email || '',
+        phone: c.phone || '',
+        company: c.company?.name || 'Independent Account',
+        dealValue: 5000, // fallback UI stats
+        status: 'Contacted', // fallback UI stats
+        owner: 'Shivam Gupta',
+        lastActivity: 'Active',
+      }));
+
+      setContacts(mappedContacts);
+    } catch (err: any) {
+      console.error('Failed to load contacts data:', err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchData();
+  }, [search]);
+
+  const handleAddContact = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName || !newEmail) return;
 
-    const newContact: Contact = {
-      id: `CON-${(contacts.length + 1).toString().padStart(2, '0')}`,
-      name: newName,
-      email: newEmail,
-      phone: newPhone || '+91 00000 00000',
-      company: newCompany || 'Independent Account',
-      dealValue: Number(newValue) || 0,
-      status: newStatus,
-      owner: 'Shivam Gupta',
-      lastActivity: 'Just now',
-    };
+    try {
+      const nameParts = newName.trim().split(/\s+/);
+      const firstName = nameParts[0] || '';
+      const lastName = nameParts.slice(1).join(' ') || undefined;
 
-    setContacts([newContact, ...contacts]);
-    setIsAddOpen(false);
+      const payload = {
+        firstName,
+        lastName,
+        email: newEmail,
+        phone: newPhone || undefined,
+        companyId: newCompanyId || undefined,
+      };
 
-    // Reset Form
-    setNewName('');
-    setNewEmail('');
-    setNewPhone('');
-    setNewCompany('');
-    setNewValue('5000');
-    setNewStatus('Lead');
+      const c = await apiRequest('/contacts', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
+
+      const selectedCompName = dbCompanies.find((comp) => comp.id === newCompanyId)?.name || 'Independent Account';
+
+      const newContact: Contact = {
+        id: c.id,
+        name: `${c.firstName} ${c.lastName || ''}`.trim(),
+        email: c.email || '',
+        phone: c.phone || '',
+        company: selectedCompName,
+        dealValue: Number(newValue) || 0,
+        status: newStatus,
+        owner: 'Shivam Gupta',
+        lastActivity: 'Just now',
+      };
+
+      setContacts([newContact, ...contacts]);
+      setIsAddOpen(false);
+
+      // Reset Form
+      setNewName('');
+      setNewEmail('');
+      setNewPhone('');
+      setNewCompanyId('');
+      setNewValue('5000');
+      setNewStatus('Lead');
+    } catch (err: any) {
+      alert('Error creating contact: ' + err.message);
+    }
   };
 
-  const handleDeleteContact = (id: string) => {
-    setContacts(contacts.filter((c) => c.id !== id));
+  const handleDeleteContact = async (id: string) => {
+    try {
+      await apiRequest(`/contacts/${id}`, {
+        method: 'DELETE',
+      });
+      setContacts(contacts.filter((c) => c.id !== id));
+      setIsDeleteOpen(false);
+    } catch (err: any) {
+      alert('Error deleting contact: ' + err.message);
+    }
   };
 
   const filteredContacts = contacts.filter((c) => {
@@ -239,7 +301,21 @@ export default function ContactsPage() {
           <Input label="Contact Full Name" placeholder="e.g. Abhay Pratap" value={newName} onChange={(e) => setNewName(e.target.value)} required />
           <Input label="Work Email" type="email" placeholder="e.g. abhay@agency.com" value={newEmail} onChange={(e) => setNewEmail(e.target.value)} required />
           <Input label="Phone Number" placeholder="e.g. +91 98765 43210" value={newPhone} onChange={(e) => setNewPhone(e.target.value)} />
-          <Input label="Company Account Name" placeholder="e.g. Nexon Digital Corp" value={newCompany} onChange={(e) => setNewCompany(e.target.value)} />
+          <div className="flex flex-col gap-1.5">
+            <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Associated Company Account</label>
+            <select
+              value={newCompanyId}
+              onChange={(e) => setNewCompanyId(e.target.value)}
+              className="w-full text-sm rounded-lg border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-card text-slate-900 dark:text-slate-100 p-2.5 focus:outline-none"
+            >
+              <option value="">Select Company Account (Optional)</option>
+              {dbCompanies.map((comp) => (
+                <option key={comp.id} value={comp.id}>
+                  {comp.name}
+                </option>
+              ))}
+            </select>
+          </div>
           <Input label="Estimated Deal Value ($)" type="number" placeholder="5000" value={newValue} onChange={(e) => setNewValue(e.target.value)} />
           <div className="flex flex-col gap-1.5">
             <label className="text-xs font-semibold uppercase tracking-wider text-slate-500">Pipeline Stage</label>

@@ -3,7 +3,10 @@ import { PrismaService } from '../../database/prisma.service';
 import { CreateCompanyDto } from './dto/create-company.dto';
 import { UpdateCompanyDto } from './dto/update-company.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { buildOrderBy } from '../../common/utils/sort-order';
 import { Company } from '@saas/database';
+
+const COMPANY_SORT_FIELDS = ['name', 'industry', 'createdAt', 'updatedAt'] as const;
 
 @Injectable()
 export class CompaniesService {
@@ -38,7 +41,7 @@ export class CompaniesService {
         where,
         skip,
         take: limit,
-        orderBy: sortBy ? { [sortBy]: sortOrder } : { createdAt: 'desc' },
+        orderBy: buildOrderBy(sortBy, sortOrder, COMPANY_SORT_FIELDS),
       }),
     ]);
 

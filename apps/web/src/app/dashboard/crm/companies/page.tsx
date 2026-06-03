@@ -1,12 +1,13 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { Card, StatsCard } from '@/components/ui/Card';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { Modal, ConfirmationModal } from '@/components/ui/Modal';
 import { Building2, Search, Plus, Trash2, Edit3, ExternalLink, Globe, Landmark, Users } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { apiRequest } from '@/lib/api';
 
 interface Company {
   id: string;
@@ -20,13 +21,8 @@ interface Company {
 }
 
 export default function CompaniesPage() {
-  const [companies, setCompanies] = useState<Company[]>([
-    { id: 'COM-01', name: 'Nexon Digital Corp', industry: 'E-commerce & SaaS', size: '51-200', spentARR: 120000, adBudget: 8500, country: 'India', contactsCount: 4 },
-    { id: 'COM-02', name: 'Apex Health Ltd', industry: 'Healthcare & Pharma', size: '200+', spentARR: 85000, adBudget: 4500, country: 'USA', contactsCount: 2 },
-    { id: 'COM-03', name: 'Elite Real Estate', industry: 'Real Estate & Builders', size: '11-50', spentARR: 45000, adBudget: 12000, country: 'UAE', contactsCount: 3 },
-    { id: 'COM-04', name: 'Zetta E-learning', industry: 'EdTech & Education', size: '1-10', spentARR: 25000, adBudget: 6000, country: 'India', contactsCount: 1 },
-    { id: 'COM-05', name: 'Kross Clothing', industry: 'Fashion & Apparel', size: '11-50', spentARR: 65000, adBudget: 0, country: 'India', contactsCount: 2 },
-  ]);
+  const [companies, setCompanies] = useState<Company[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
 
   const [search, setSearch] = useState('');
   const [industryFilter, setIndustryFilter] = useState('All');
@@ -45,35 +41,85 @@ export default function CompaniesPage() {
   const [newBudget, setNewBudget] = useState('5000');
   const [newCountry, setNewCountry] = useState('India');
 
-  const handleAddCompany = (e: React.FormEvent) => {
+  const fetchCompanies = async () => {
+    try {
+      setIsLoading(true);
+      const res = await apiRequest(`/companies?limit=100&search=${search}`);
+      const mapped = (res.data || []).map((c: any) => ({
+        id: c.id,
+        name: c.name,
+        industry: c.industry || 'Other',
+        size: '11-50',
+        spentARR: 15000,
+        adBudget: 5000,
+        country: c.country || 'India',
+        contactsCount: 1,
+      }));
+      setCompanies(mapped);
+    } catch (err: any) {
+      console.error('Failed to fetch companies:', err.message);
+    } finally {
+      setIsLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchCompanies();
+  }, [search]);
+
+  const handleAddCompany = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!newName) return;
 
-    const newComp: Company = {
-      id: `COM-${(companies.length + 1).toString().padStart(2, '0')}`,
-      name: newName,
-      industry: newIndustry,
-      size: newSize,
-      spentARR: Number(newARR) || 0,
-      adBudget: Number(newBudget) || 0,
-      country: newCountry || 'India',
-      contactsCount: 1,
-    };
+    try {
+      const payload = {
+        name: newName,
+        industry: newIndustry,
+        website: '',
+        phone: '',
+      };
 
-    setCompanies([newComp, ...companies]);
-    setIsAddOpen(false);
+      const c = await apiRequest('/companies', {
+        method: 'POST',
+        body: JSON.stringify(payload),
+      });
 
-    // Reset Form
-    setNewName('');
-    setNewIndustry('E-commerce & SaaS');
-    setNewSize('1-10');
-    setNewARR('15000');
-    setNewBudget('5000');
-    setNewCountry('India');
+      const newComp: Company = {
+        id: c.id,
+        name: c.name,
+        industry: c.industry || 'Other',
+        size: newSize,
+        spentARR: Number(newARR) || 0,
+        adBudget: Number(newBudget) || 0,
+        country: newCountry || 'India',
+        contactsCount: 1,
+      };
+
+      setCompanies([newComp, ...companies]);
+      setIsAddOpen(false);
+
+      // Reset Form
+      setNewName('');
+      setNewIndustry('E-commerce & SaaS');
+      setNewSize('1-10');
+      setNewARR('15000');
+      setNewBudget('5000');
+      setNewCountry('India');
+    } catch (err: any) {
+      alert('Error creating company: ' + err.message);
+    }
   };
 
-  const handleDeleteCompany = (id: string) => {
-    setCompanies(companies.filter((c) => c.id !== id));
+  const handleDeleteCompany = async (id: string) => {
+    try {
+      await apiRequest(`/companies/${id}`, {
+        method: 'DELETE',
+      });
+      setCompanies(companies.filter((c) => c.id !== id));
+      setIsDeleteOpen(false);
+    } catch (err: any) {
+      alert('Error deleting company: ' + err.message);
+    }
   };
 
   const filteredCompanies = companies.filter((c) => {
