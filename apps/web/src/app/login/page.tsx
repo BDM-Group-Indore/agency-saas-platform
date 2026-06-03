@@ -5,12 +5,14 @@ import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
 import { useRoleStore, UserRole } from '@/store/roleStore';
+import { BASE_URL } from '@/lib/api';
 import { Mail, Lock, ShieldCheck, ArrowRight, Activity, Users, Flame } from 'lucide-react';
 import Link from 'next/link';
 
 export default function LoginPage() {
   const router = useRouter();
   const { setRole } = useRoleStore();
+  const isDemoMode = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === 'true';
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [isLoading, setIsLoading] = useState(false);
@@ -35,8 +37,7 @@ export default function LoginPage() {
     setIsLoading(true);
 
     try {
-      // 1. Try real backend integration call (Abhishek's NestJS API)
-      const res = await fetch('http://localhost:3000/api/auth/login', {
+      const res = await fetch(`${BASE_URL}/auth/login`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ email, password }),
@@ -68,19 +69,8 @@ export default function LoginPage() {
         throw new Error(errData.message || 'Verification failure');
       }
     } catch (err: any) {
-      console.warn('NestJS auth service offline or threw error. Transitioning to local mockup autopilot mode:', err.message);
-      
-      // 2. Gratefully fall back to dynamic mock authentication flow so client demo remains bulletproof
-      setTimeout(() => {
-        setIsLoading(false);
-        const matchedDemo = demoAccounts.find(acc => acc.email.toLowerCase() === email.toLowerCase());
-        if (matchedDemo) {
-          setRole(matchedDemo.role);
-        } else {
-          setRole('Agency Owner'); // Default fallback
-        }
-        router.push('/dashboard');
-      }, 600);
+      setError(err.message || 'Unable to sign in');
+      setIsLoading(false);
     }
   };
 
@@ -155,7 +145,7 @@ export default function LoginPage() {
               Sign In
             </h2>
             <p className="text-xs text-slate-400">
-              Access your digital command center. No server setups required.
+              Access your digital command center.
             </p>
           </div>
 
@@ -207,7 +197,7 @@ export default function LoginPage() {
             </Button>
           </form>
 
-          {/* Quick Demo Acc Login Switcher for Client Demo convenience */}
+          {isDemoMode && (
           <div className="mt-8 pt-6 border-t border-slate-800/60">
             <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 block mb-3">
               Quick Role Demo (Click to Prefill)
@@ -226,6 +216,7 @@ export default function LoginPage() {
               ))}
             </div>
           </div>
+          )}
 
           <p className="text-xs text-center text-slate-400 mt-6">
             Don't have an account?{' '}

@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useEffect, useState } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { useThemeStore } from '@/store/themeStore';
 import { useRoleStore, UserRole } from '@/store/roleStore';
@@ -29,16 +29,24 @@ import {
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { ThemeProvider } from '@/components/ThemeProvider';
+import { apiRequest } from '@/lib/api';
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { theme, toggleTheme } = useThemeStore();
   const { currentRole, setRole } = useRoleStore();
+  const isDemoMode = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === 'true';
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+
+  useEffect(() => {
+    if (!localStorage.getItem('accessToken')) {
+      router.replace('/login');
+    }
+  }, [router]);
 
   // Fixed Sidebar structure (Never change after approval)
   const sidebarItems = [
@@ -83,7 +91,18 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
     console.log(`Switched to mock role: ${role}`);
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    const refreshToken = localStorage.getItem('refreshToken');
+    try {
+      await apiRequest('/auth/logout', {
+        method: 'POST',
+        body: JSON.stringify({ refreshToken }),
+      });
+    } catch (err) {
+      console.warn('Logout API call failed; clearing local session anyway.', err);
+    }
+    localStorage.removeItem('accessToken');
+    localStorage.removeItem('refreshToken');
     router.push('/login');
   };
 
@@ -278,16 +297,23 @@ export default function DashboardLayout({ children }: { children: React.ReactNod
               
               {/* Dynamic Interactive Role Switcher for शिवम client feedback */}
               <div className="relative">
-                <button
-                  onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
-                  className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-dark-border hover:bg-slate-200 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-premium cursor-pointer"
-                >
-                  <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                  <span>Role: {currentRole}</span>
-                  <ChevronDown className="w-3.5 h-3.5 opacity-60" />
-                </button>
+                {isDemoMode ? (
+                  <button
+                    onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
+                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-dark-border hover:bg-slate-200 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-premium cursor-pointer"
+                  >
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
+                    <span>Role: {currentRole}</span>
+                    <ChevronDown className="w-3.5 h-3.5 opacity-60" />
+                  </button>
+                ) : (
+                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-dark-border text-xs font-semibold text-slate-700 dark:text-slate-200">
+                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
+                    <span>{currentRole}</span>
+                  </div>
+                )}
 
-                {isRoleDropdownOpen && (
+                {isDemoMode && isRoleDropdownOpen && (
                   <>
                     <div
                       className="fixed inset-0 z-40"

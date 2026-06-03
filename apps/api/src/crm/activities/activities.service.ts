@@ -3,7 +3,10 @@ import { PrismaService } from '../../database/prisma.service';
 import { CreateActivityDto } from './dto/create-activity.dto';
 import { UpdateActivityDto } from './dto/update-activity.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { buildOrderBy } from '../../common/utils/sort-order';
 import { Activity } from '@saas/database';
+
+const ACTIVITY_SORT_FIELDS = ['type', 'subject', 'dueDate', 'isCompleted', 'createdAt', 'updatedAt'] as const;
 
 @Injectable()
 export class ActivitiesService {
@@ -76,7 +79,7 @@ export class ActivitiesService {
             select: { id: true, title: true },
           },
         },
-        orderBy: sortBy ? { [sortBy]: sortOrder } : { createdAt: 'desc' },
+        orderBy: buildOrderBy(sortBy, sortOrder, ACTIVITY_SORT_FIELDS),
       }),
     ]);
 

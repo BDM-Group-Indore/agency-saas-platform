@@ -3,7 +3,10 @@ import { PrismaService } from '../../database/prisma.service';
 import { CreateNoteDto } from './dto/create-note.dto';
 import { UpdateNoteDto } from './dto/update-note.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { buildOrderBy } from '../../common/utils/sort-order';
 import { Note } from '@saas/database';
+
+const NOTE_SORT_FIELDS = ['createdAt', 'updatedAt'] as const;
 
 @Injectable()
 export class NotesService {
@@ -68,7 +71,7 @@ export class NotesService {
             select: { id: true, title: true },
           },
         },
-        orderBy: sortBy ? { [sortBy]: sortOrder } : { createdAt: 'desc' },
+        orderBy: buildOrderBy(sortBy, sortOrder, NOTE_SORT_FIELDS),
       }),
     ]);
 

@@ -3,7 +3,10 @@ import { PrismaService } from '../../database/prisma.service';
 import { CreateContactDto } from './dto/create-contact.dto';
 import { UpdateContactDto } from './dto/update-contact.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { buildOrderBy } from '../../common/utils/sort-order';
 import { Contact } from '@saas/database';
+
+const CONTACT_SORT_FIELDS = ['firstName', 'lastName', 'email', 'phone', 'createdAt', 'updatedAt'] as const;
 
 @Injectable()
 export class ContactsService {
@@ -60,7 +63,7 @@ export class ContactsService {
             select: { id: true, name: true },
           },
         },
-        orderBy: sortBy ? { [sortBy]: sortOrder } : { createdAt: 'desc' },
+        orderBy: buildOrderBy(sortBy, sortOrder, CONTACT_SORT_FIELDS),
       }),
     ]);
 

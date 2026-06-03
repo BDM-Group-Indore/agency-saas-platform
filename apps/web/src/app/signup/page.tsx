@@ -4,6 +4,7 @@ import React, { useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { Input } from '@/components/ui/Input';
 import { Button } from '@/components/ui/Button';
+import { BASE_URL } from '@/lib/api';
 import { Mail, Lock, User, Building2, ShieldCheck, ArrowRight, Flame } from 'lucide-react';
 import Link from 'next/link';
 
@@ -28,8 +29,7 @@ export default function SignupPage() {
     setIsLoading(true);
 
     try {
-      // 1. Try real NestJS registration API call
-      const res = await fetch('http://localhost:3000/api/auth/register', {
+      const res = await fetch(`${BASE_URL}/auth/register`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({
@@ -37,7 +37,6 @@ export default function SignupPage() {
           password,
           firstName: name,
           tenantName: agencyName,
-          role: 'Agency Owner',
         }),
       });
 
@@ -50,13 +49,8 @@ export default function SignupPage() {
         throw new Error(errData.message || 'Registration failure');
       }
     } catch (err: any) {
-      console.warn('NestJS auth service registration offline or threw error. Executing mockup registration fallback:', err.message);
-
-      // 2. Fall back gracefully to mock registration redirect
-      setTimeout(() => {
-        setIsLoading(false);
-        router.push('/login');
-      }, 1000);
+      setError(err.message || 'Unable to create account');
+      setIsLoading(false);
     }
   };
 

@@ -1,5 +1,4 @@
-import { IsEmail, IsString, MinLength, IsOptional, IsEnum } from 'class-validator';
-import { UserRole } from '@saas/shared-types';
+import { IsEmail, IsString, MinLength, IsOptional } from 'class-validator';
 
 export class RegisterDto {
   @IsEmail()
@@ -16,10 +15,6 @@ export class RegisterDto {
   @IsString()
   @IsOptional()
   lastName?: string;
-
-  @IsEnum(UserRole)
-  @IsOptional()
-  role?: UserRole;
 
   @IsString()
   @IsOptional()

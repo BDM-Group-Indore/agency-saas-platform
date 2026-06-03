@@ -8,7 +8,7 @@
     "dev": "pnpm --recursive --parallel run dev",
     "phase1": "pnpm dev",
     "test": "pnpm --recursive run test",
-    "lint": "eslint"
+    "lint": "pnpm --filter @saas/web run lint && pnpm --filter @saas/api run lint"
   },
   "devDependencies": {
     "eslint": "^9",

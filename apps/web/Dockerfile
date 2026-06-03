@@ -1,46 +1,43 @@
-# Multi-stage production build for Next.js web application
-FROM node:20-alpine AS base
-
-# Install dependencies only when needed
-FROM base AS deps
+FROM node:20-alpine AS deps
 WORKDIR /app
-COPY package.json package-lock.json* ./
-RUN npm ci
 
-# Rebuild the source code only when needed
-FROM base AS builder
+ENV PNPM_HOME="/pnpm"
+ENV PATH="$PNPM_HOME:$PATH"
+
+RUN corepack enable
+
+COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
+COPY apps/web/package.json apps/web/package.json
+COPY packages/ui/package.json packages/ui/package.json
+COPY packages/shared-types/package.json packages/shared-types/package.json
+RUN pnpm install --frozen-lockfile
+
+FROM deps AS builder
 WORKDIR /app
-COPY --from=deps /app/node_modules ./node_modules
+
 COPY . .
-
-# Next.js collects completely anonymous telemetry during build.
-# Opt-out of this by setting the NEXT_TELEMETRY_DISABLED env variable.
 ENV NEXT_TELEMETRY_DISABLED=1
-RUN npm run build
+RUN pnpm --filter @saas/ui run build
+RUN pnpm --filter @saas/shared-types run build
+RUN pnpm --filter @saas/web run build
 
-# Production image, copy all the files and run next
-FROM base AS runner
+FROM node:20-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
-ENV PORT=3000
+ENV PORT=3001
 ENV HOSTNAME="0.0.0.0"
+ENV NEXT_TELEMETRY_DISABLED=1
 
 RUN addgroup --system --gid 1001 nodejs
 RUN adduser --system --uid 1001 nextjs
 
-COPY --from=builder /app/public ./public
-
-# Set the correct permission for prerender cache
-RUN mkdir .next
-RUN chown nextjs:nodejs .next
-
-# Automatically leverage output traces to reduce image size
-COPY --from=builder --chown=nextjs:nodejs /app/.next/standalone ./
-COPY --from=builder --chown=nextjs:nodejs /app/.next/static ./.next/static
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/standalone ./
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/public ./apps/web/public
+COPY --from=builder --chown=nextjs:nodejs /app/apps/web/.next/static ./apps/web/.next/static
 
 USER nextjs
 
-EXPOSE 3000
+EXPOSE 3001
 
-CMD ["node", "server.js"]
+CMD ["node", "apps/web/server.js"]

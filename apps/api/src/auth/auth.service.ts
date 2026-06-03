@@ -40,13 +40,7 @@ export class AuthService {
         tenantId = tenant.id;
       }
 
-      let userRole: UserRole = UserRole.CLIENT;
-      if (dto.role) {
-        const normalized = dto.role.toUpperCase().replace(/\s+/g, '_') as UserRole;
-        if (Object.values(UserRole).includes(normalized)) {
-          userRole = normalized;
-        }
-      }
+      const userRole: UserRole = tenantId ? UserRole.AGENCY_OWNER : UserRole.CLIENT;
 
       const user = await tx.user.create({
         data: {

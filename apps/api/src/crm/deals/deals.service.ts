@@ -3,7 +3,10 @@ import { PrismaService } from '../../database/prisma.service';
 import { CreateDealDto } from './dto/create-deal.dto';
 import { UpdateDealDto } from './dto/update-deal.dto';
 import { PaginationQueryDto } from '../../common/dto/pagination-query.dto';
+import { buildOrderBy } from '../../common/utils/sort-order';
 import { Deal } from '@saas/database';
+
+const DEAL_SORT_FIELDS = ['title', 'value', 'status', 'createdAt', 'updatedAt'] as const;
 
 @Injectable()
 export class DealsService {
@@ -98,7 +101,7 @@ export class DealsService {
             select: { id: true, firstName: true, lastName: true },
           },
         },
-        orderBy: sortBy ? { [sortBy]: sortOrder } : { createdAt: 'desc' },
+        orderBy: buildOrderBy(sortBy, sortOrder, DEAL_SORT_FIELDS),
       }),
     ]);
 
