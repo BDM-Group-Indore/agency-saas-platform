@@ -1,4 +1,4 @@
-const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api';
+export const BASE_URL = process.env.NEXT_PUBLIC_API_URL ?? 'http://localhost:3000/api';
 
 export async function apiRequest(path: string, options: RequestInit = {}) {
   const token = typeof window !== 'undefined' ? localStorage.getItem('accessToken') : null;
@@ -26,5 +26,3 @@ export async function apiRequest(path: string, options: RequestInit = {}) {
 
   return response.json();
 }
-
-export { BASE_URL };
