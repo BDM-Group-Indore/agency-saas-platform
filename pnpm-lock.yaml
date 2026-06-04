@@ -17,6 +17,9 @@ importers:
 
   apps/api:
     dependencies:
+      '@clickhouse/client':
+        specifier: ^1.19.0
+        version: 1.19.0
       '@nestjs/common':
         specifier: ^10.3.3
         version: 10.4.22(class-transformer@0.5.1)(class-validator@0.14.4)(reflect-metadata@0.2.2)(rxjs@7.8.2)
@@ -68,6 +71,9 @@ importers:
       passport-jwt:
         specifier: ^4.0.1
         version: 4.0.1
+      rxjs:
+        specifier: ^7.8.1
+        version: 7.8.2
     devDependencies:
       '@nestjs/cli':
         specifier: ^10.3.2
@@ -392,6 +398,13 @@ packages:
 
   '@borewit/text-codec@0.2.2':
     resolution: {integrity: sha512-DDaRehssg1aNrH4+2hnj1B7vnUGEjU6OIlyRdkMd0aUdIUvKXrJfXsy8LVtXAy7DRvYVluWbMspsRhz2lcW0mQ==}
+
+  '@clickhouse/client-common@1.19.0':
+    resolution: {integrity: sha512-HHQw7MUt1aFquSlnoQhlRO8e7zhRw7rJZFNSYiHP2wxzEVeoI0cX8kKoTp+xlVySvFi8s0mAC3bi8D031xmIQg==}
+
+  '@clickhouse/client@1.19.0':
+    resolution: {integrity: sha512-R/35tIFZjwRyqtTN0cnlvd45zU+YREuQ/cnfi6c+KGGkVSCF+1cl8mZ9kkxshqHx2U4YjcmPVElJaRn2bEqJ4g==}
+    engines: {node: '>=16'}
 
   '@colors/colors@1.5.0':
     resolution: {integrity: sha512-ooWCrlZP11i8GImSjTHYHLkvFDP48nS4+204nGb1RiX/WXYHmJA2III9/e2DWVabCESdW7hBAEzHRqUn9OUVvQ==}
@@ -4744,6 +4757,12 @@ snapshots:
   '@bcoe/v8-coverage@0.2.3': {}
 
   '@borewit/text-codec@0.2.2': {}
+
+  '@clickhouse/client-common@1.19.0': {}
+
+  '@clickhouse/client@1.19.0':
+    dependencies:
+      '@clickhouse/client-common': 1.19.0
 
   '@colors/colors@1.5.0':
     optional: true

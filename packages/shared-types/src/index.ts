@@ -4,5 +4,6 @@ export * from './crm.interface';
 export * from './whatsapp.interface';
 export * from './billing.interface';
 export * from './ai.interface';
+export * from './analytics.interface';
 
 

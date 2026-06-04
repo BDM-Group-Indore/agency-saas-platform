@@ -1,9 +1,14 @@
 import { Injectable } from '@nestjs/common';
 import { PrismaService } from '../database/prisma.service';
+import { EventStoreService } from './event-store.service';
+import { AuditEventPayload, ApiMetricsSummary } from '@saas/shared-types';
 
 @Injectable()
 export class AnalyticsService {
-  constructor(private readonly prisma: PrismaService) {}
+  constructor(
+    private readonly prisma: PrismaService,
+    private readonly eventStore: EventStoreService,
+  ) {}
 
   // ─── KPI Summary ─────────────────────────────────────────────────────────
   async getSummary(tenantId: string) {
@@ -131,5 +136,18 @@ export class AnalyticsService {
     }
 
     return Object.entries(sourceCounts).map(([source, count]) => ({ source, count }));
+  }
+
+  // ─── API Performance Metrics & System Audit Trails ─────────────────────────
+  async getApiPerformanceMetrics(tenantId: string): Promise<ApiMetricsSummary> {
+    return this.eventStore.getApiPerformanceMetrics(tenantId);
+  }
+
+  async getAuditLogs(tenantId: string, limit = 100): Promise<AuditEventPayload[]> {
+    return this.eventStore.getAuditLogs(tenantId, limit);
+  }
+
+  async logCustomEvent(payload: AuditEventPayload): Promise<void> {
+    return this.eventStore.logEvent(payload);
   }
 }

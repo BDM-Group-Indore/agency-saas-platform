@@ -1,8 +1,10 @@
-import { Controller, Get, UseGuards } from '@nestjs/common';
-import { ApiBearerAuth, ApiOperation, ApiTags } from '@nestjs/swagger';
+import { Controller, Get, Post, Body, Query, Req, UseGuards } from '@nestjs/common';
+import { ApiBearerAuth, ApiOperation, ApiQuery, ApiTags } from '@nestjs/swagger';
 import { AnalyticsService } from './analytics.service';
 import { JwtAuthGuard } from '../auth/guards/jwt-auth.guard';
 import { TenantId } from '../common/decorators/tenant-id.decorator';
+import { CurrentUser } from '../common/decorators/current-user.decorator';
+import { LogEventDto } from './dto/log-event.dto';
 
 @ApiTags('analytics')
 @ApiBearerAuth()
@@ -33,5 +35,42 @@ export class AnalyticsController {
   @ApiOperation({ summary: 'Lead count breakdown by source channel' })
   getLeadSources(@TenantId() tenantId: string) {
     return this.analyticsService.getLeadSources(tenantId);
+  }
+
+  @Get('api-metrics')
+  @ApiOperation({ summary: 'Get API request latency and performance metrics' })
+  getApiMetrics(@TenantId() tenantId: string) {
+    return this.analyticsService.getApiPerformanceMetrics(tenantId);
+  }
+
+  @Get('audit-logs')
+  @ApiOperation({ summary: 'Get security audit trails/logs for the tenant' })
+  @ApiQuery({ name: 'limit', required: false, type: Number, description: 'Number of logs to retrieve' })
+  getAuditLogs(
+    @TenantId() tenantId: string,
+    @Query('limit') limit?: number,
+  ) {
+    const resolvedLimit = limit ? Number(limit) : 100;
+    return this.analyticsService.getAuditLogs(tenantId, resolvedLimit);
+  }
+
+  @Post('events')
+  @ApiOperation({ summary: 'Manually record a custom security/audit event' })
+  async logEvent(
+    @TenantId() tenantId: string,
+    @CurrentUser() user: any,
+    @Body() dto: LogEventDto,
+  ) {
+    await this.analyticsService.logCustomEvent({
+      tenantId,
+      userId: user?.id || user?.userId,
+      event: dto.event,
+      status: dto.status,
+      meta: dto.meta,
+      ipAddress: dto.ipAddress,
+      duration: dto.duration,
+      timestamp: dto.timestamp ? new Date(dto.timestamp) : new Date(),
+    });
+    return { success: true };
   }
 }
