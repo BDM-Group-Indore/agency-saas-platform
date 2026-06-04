@@ -40,6 +40,12 @@ export interface IInvoice {
   paidAt?: Date | null;
   lineItems: InvoiceLineItem[];
   notes?: string | null;
+  businessGstin?: string | null;
+  clientGstin?: string | null;
+  cgst?: number | null;
+  sgst?: number | null;
+  igst?: number | null;
+  taxAmount?: number | null;
   createdAt: Date;
   updatedAt: Date;
 }
@@ -94,4 +100,18 @@ export interface IRevenuePoint {
   month: string;
   revenue: number;
   invoiceCount: number;
+}
+
+export interface IPaymentTransaction {
+  id: string;
+  invoiceId: string;
+  amount: number;
+  status: string; // PENDING, SUCCESS, FAILED
+  paymentMethod: string; // STRIPE, RAZORPAY, CASH, BANK_TRANSFER
+  gatewayTransactionId?: string | null;
+  gatewayResponse?: any;
+  paidAt?: Date | null;
+  tenantId: string;
+  createdAt: Date;
+  updatedAt: Date;
 }

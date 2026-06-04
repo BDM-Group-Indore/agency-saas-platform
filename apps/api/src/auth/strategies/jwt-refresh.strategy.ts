@@ -18,7 +18,15 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
     }
 
     super({
-      jwtFromRequest: ExtractJwt.fromAuthHeaderAsBearerToken(),
+      jwtFromRequest: ExtractJwt.fromExtractors([
+        (req: any) => {
+          if (req && req.cookies && req.cookies.refresh_token) {
+            return req.cookies.refresh_token;
+          }
+          return null;
+        },
+        ExtractJwt.fromAuthHeaderAsBearerToken(),
+      ]),
       ignoreExpiration: false,
       secretOrKey: secret,
       passReqToCallback: true,
@@ -26,11 +34,16 @@ export class JwtRefreshStrategy extends PassportStrategy(Strategy, 'jwt-refresh'
   }
 
   async validate(req: Request, payload: IJwtRefreshPayload) {
-    const authorization = req.get('Authorization');
-    if (!authorization) {
-      throw new UnauthorizedException('Authorization header is missing');
+    let refreshToken = '';
+    if (req.cookies && req.cookies.refresh_token) {
+      refreshToken = req.cookies.refresh_token;
+    } else {
+      const authorization = req.get('Authorization');
+      if (!authorization) {
+        throw new UnauthorizedException('Authorization header or cookie is missing');
+      }
+      refreshToken = authorization.replace('Bearer ', '').trim();
     }
-    const refreshToken = authorization.replace('Bearer ', '').trim();
 
     const user = await this.prisma.user.findUnique({
       where: { id: payload.sub },

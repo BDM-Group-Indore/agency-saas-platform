@@ -1,405 +1,460 @@
 'use client';
 
-import React, { useEffect, useState } from 'react';
-import { useRouter, usePathname } from 'next/navigation';
-import { useThemeStore } from '@/store/themeStore';
-import { useRoleStore, UserRole } from '@/store/roleStore';
-import { roleDetails } from '@/data/mockData';
+import React, { useEffect, useMemo, useState } from 'react';
+import { usePathname, useRouter } from 'next/navigation';
 import {
-  LayoutDashboard,
-  UserPlus,
-  Network,
-  MessageSquare,
-  Megaphone,
   BarChart3,
-  CreditCard,
-  LifeBuoy,
-  Settings,
-  Flame,
-  Sun,
-  Moon,
-  Search,
   Bell,
-  Menu,
-  X,
+  Building,
   ChevronDown,
-  User as UserIcon,
+  CreditCard,
+  Flame,
   HelpCircle,
-  TrendingUp,
+  LayoutDashboard,
+  LifeBuoy,
+  Megaphone,
+  Menu,
+  MessageSquare,
+  Moon,
+  Network,
+  Plus,
+  Search,
+  Settings,
+  Store,
+  Sun,
+  User as UserIcon,
+  UserPlus,
+  X,
 } from 'lucide-react';
-import { cn } from '@/lib/utils';
-import { ThemeProvider } from '@/components/ThemeProvider';
+import { Button } from '@/components/ui/Button';
+import { Badge } from '@/components/ui/Badge';
+import { Input } from '@/components/ui/Input';
 import { apiRequest } from '@/lib/api';
+import { cn } from '@/lib/utils';
+import { roleDetails } from '@/data/mockData';
+import { useRoleStore, UserRole } from '@/store/roleStore';
+import { useThemeStore } from '@/store/themeStore';
+import { useAuthStore } from '@/store/authStore';
+
+const sidebarItems = [
+  { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
+  { name: 'Leads', icon: UserPlus, path: '/dashboard/leads' },
+  { name: 'CRM', icon: Network, path: '/dashboard/crm' },
+  { name: 'WhatsApp', icon: MessageSquare, path: '/dashboard/whatsapp' },
+  { name: 'Ads', icon: Megaphone, path: '/dashboard/ads' },
+  { name: 'Analytics', icon: BarChart3, path: '/dashboard/analytics' },
+  { name: 'Billing', icon: CreditCard, path: '/dashboard/billing' },
+  { name: 'Reseller Panel', icon: Building, path: '/dashboard/reseller' },
+  { name: 'Franchise Panel', icon: Store, path: '/dashboard/franchise' },
+  { name: 'Support', icon: LifeBuoy, path: '/dashboard/support' },
+  { name: 'Settings', icon: Settings, path: '/dashboard/settings' },
+] as const;
+
+function isItemAllowedForRole(itemName: string, role: UserRole) {
+  if (['Reseller Panel', 'Franchise Panel'].includes(itemName)) {
+    return role === 'Super Admin' || role === 'Agency Owner';
+  }
+  if (role === 'Super Admin' || role === 'Agency Owner') return true;
+  if (role === 'Client') return ['Dashboard', 'Ads', 'Analytics', 'Billing', 'Support'].includes(itemName);
+  if (role === 'Sales') return ['Dashboard', 'Leads', 'CRM', 'WhatsApp', 'Support'].includes(itemName);
+  if (role === 'Support') return ['Dashboard', 'CRM', 'WhatsApp', 'Support', 'Settings'].includes(itemName);
+  if (role === 'Manager') return !['Billing', 'Reseller Panel', 'Franchise Panel'].includes(itemName);
+  return true;
+}
 
 export default function DashboardLayout({ children }: { children: React.ReactNode }) {
   const router = useRouter();
   const pathname = usePathname();
   const { theme, toggleTheme } = useThemeStore();
-  const { currentRole, setRole } = useRoleStore();
+  const { currentRole, setRole, setVerifiedRole } = useRoleStore();
   const isDemoMode = process.env.NEXT_PUBLIC_ENABLE_DEMO_MODE === 'true';
+
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
   const [isMobileOpen, setIsMobileOpen] = useState(false);
   const [isRoleDropdownOpen, setIsRoleDropdownOpen] = useState(false);
+  const [isTenantDropdownOpen, setIsTenantDropdownOpen] = useState(false);
   const [searchQuery, setSearchQuery] = useState('');
+  const [branding, setBranding] = useState<{
+    name: string;
+    logoUrl: string | null;
+    primaryColor: string;
+    secondaryColor: string;
+  } | null>(null);
+  const [childTenants, setChildTenants] = useState<any[]>([]);
+  const [activeSwitchTenantId, setActiveSwitchTenantId] = useState<string | null>(null);
 
   useEffect(() => {
-    if (!localStorage.getItem('accessToken')) {
-      router.replace('/login');
-    }
-  }, [router]);
+    const checkAuth = async () => {
+      try {
+        const user = await apiRequest('/auth/me');
+        if (user && user.role) {
+          let resolvedRole: UserRole = 'Agency Owner';
+          if (user.role === 'SUPER_ADMIN') resolvedRole = 'Super Admin';
+          else if (user.role === 'AGENCY_OWNER') resolvedRole = 'Agency Owner';
+          else if (user.role === 'MANAGER') resolvedRole = 'Manager';
+          else if (user.role === 'SALES') resolvedRole = 'Sales';
+          else if (user.role === 'SUPPORT') resolvedRole = 'Support';
+          else if (user.role === 'CLIENT') resolvedRole = 'Client';
+          
+          setVerifiedRole(resolvedRole);
+        }
+      } catch (err) {
+        router.replace('/login');
+        return;
+      }
 
-  // Fixed Sidebar structure (Never change after approval)
-  const sidebarItems = [
-    { name: 'Dashboard', icon: LayoutDashboard, path: '/dashboard' },
-    { name: 'Leads', icon: UserPlus, path: '/dashboard/leads' },
-    { name: 'CRM', icon: Network, path: '/dashboard/crm' },
-    { name: 'WhatsApp', icon: MessageSquare, path: '/dashboard/whatsapp' },
-    { name: 'Ads', icon: Megaphone, path: '/dashboard/ads' },
-    { name: 'Analytics', icon: BarChart3, path: '/dashboard/analytics' },
-    { name: 'Billing', icon: CreditCard, path: '/dashboard/billing' },
-    { name: 'Support', icon: LifeBuoy, path: '/dashboard/support' },
-    { name: 'Settings', icon: Settings, path: '/dashboard/settings' },
-  ];
+      const swId = localStorage.getItem('activeSwitchTenantId');
+      setActiveSwitchTenantId(swId);
+      
+      fetchBranding();
+      fetchTenants();
+    };
 
-  // Dynamic Navigation adaptions based on current role (Mockup system)
-  const isItemAllowedForRole = (itemName: string, role: UserRole) => {
-    if (role === 'Super Admin' || role === 'Agency Owner') return true;
-    if (role === 'Client') {
-      // Clients only see Dashboard, Ads, Analytics, Billing, Support
-      return ['Dashboard', 'Ads', 'Analytics', 'Billing', 'Support'].includes(itemName);
-    }
-    if (role === 'Sales') {
-      // Sales focuses on Leads, CRM, WhatsApp, Support
-      return ['Dashboard', 'Leads', 'CRM', 'WhatsApp', 'Support'].includes(itemName);
-    }
-    if (role === 'Support') {
-      // Support focuses on Support, CRM, WhatsApp, Settings
-      return ['Dashboard', 'CRM', 'WhatsApp', 'Support', 'Settings'].includes(itemName);
-    }
-    if (role === 'Manager') {
-      // Managers see everything except advanced billing details
-      return itemName !== 'Billing';
-    }
-    return true;
-  };
+    const fetchBranding = async () => {
+      try {
+        const data = await apiRequest('/enterprise/branding');
+        setBranding({
+          name: data.companyName || data.name || 'AdPulse',
+          logoUrl: data.logoUrl,
+          primaryColor: data.primaryColor || '#6d28d9',
+          secondaryColor: data.secondaryColor || '#0f172a',
+        });
 
-  const handleRoleChange = (role: UserRole) => {
-    setRole(role);
-    setIsRoleDropdownOpen(false);
-    // Push dummy notification
-    const detail = roleDetails[role];
-    console.log(`Switched to mock role: ${role}`);
-  };
+        if (typeof document !== 'undefined' && data.primaryColor) {
+          document.documentElement.style.setProperty('--color-primary', data.primaryColor);
+          document.documentElement.style.setProperty('--app-primary', data.primaryColor);
+        }
+      } catch (err) {
+        console.warn('Failed to load branding:', err);
+      }
+    };
+
+    const fetchTenants = async () => {
+      if (currentRole === 'Super Admin' || currentRole === 'Agency Owner') {
+        try {
+          const data = await apiRequest('/enterprise/tenants');
+          setChildTenants(data);
+        } catch (err) {
+          console.warn('Failed to fetch child tenants:', err);
+        }
+      }
+    };
+
+    checkAuth();
+  }, [router, currentRole]);
+
+  const activeRoleConfig = roleDetails[currentRole];
+  const activeTenantName = childTenants.find((tenant) => tenant.id === activeSwitchTenantId)?.name;
+  const pageTitle = useMemo(() => {
+    if (pathname === '/dashboard') return 'Overview';
+    return pathname?.split('/').pop()?.replace('-', ' ') || 'SaaS Console';
+  }, [pathname]);
 
   const handleLogout = async () => {
-    const refreshToken = localStorage.getItem('refreshToken');
     try {
       await apiRequest('/auth/logout', {
         method: 'POST',
-        body: JSON.stringify({ refreshToken }),
       });
     } catch (err) {
-      console.warn('Logout API call failed; clearing local session anyway.', err);
+      console.warn('Logout API call failed; clearing session anyway.', err);
     }
-    localStorage.removeItem('accessToken');
-    localStorage.removeItem('refreshToken');
+    useAuthStore.getState().clearAuth();
     router.push('/login');
   };
 
-  const activeRoleConfig = roleDetails[currentRole];
+  const handleTenantSwitch = (tenantId: string | null) => {
+    if (tenantId) {
+      localStorage.setItem('activeSwitchTenantId', tenantId);
+    } else {
+      localStorage.removeItem('activeSwitchTenantId');
+    }
+    setActiveSwitchTenantId(tenantId);
+    setIsTenantDropdownOpen(false);
+    window.location.reload();
+  };
+
+  const renderNavigation = (compact = false) => (
+    <nav className={cn('flex flex-col gap-1.5', compact ? 'px-3' : 'px-4')}>
+      {sidebarItems.map((item) => {
+        const isAllowed = isItemAllowedForRole(item.name, currentRole);
+        const isActive = pathname === item.path || (item.path !== '/dashboard' && pathname?.startsWith(item.path));
+        if (!isAllowed) return null;
+
+        return (
+          <button
+            key={item.name}
+            type="button"
+            onClick={() => {
+              router.push(item.path);
+              setIsMobileOpen(false);
+            }}
+            className={cn(
+              'focus-enterprise group relative flex min-h-10 w-full items-center gap-3 rounded-lg px-3 text-sm font-bold transition-premium',
+              isActive
+                ? 'bg-primary text-white shadow-enterprise-sm'
+                : 'text-[color:var(--app-text-muted)] hover:bg-[color:var(--app-surface-secondary)] hover:text-[color:var(--app-text)]',
+              !isSidebarOpen && !compact && 'justify-center px-2'
+            )}
+            title={!isSidebarOpen && !compact ? item.name : undefined}
+          >
+            <item.icon className="h-4.5 w-4.5 shrink-0" />
+            {(isSidebarOpen || compact) && <span className="truncate">{item.name}</span>}
+            {!isSidebarOpen && !compact && (
+              <span className="pointer-events-none absolute left-full ml-3 rounded-md bg-[color:var(--app-text)] px-2 py-1 text-xs font-semibold text-[color:var(--app-surface)] opacity-0 shadow-enterprise-sm transition-premium group-hover:opacity-100">
+                {item.name}
+              </span>
+            )}
+          </button>
+        );
+      })}
+    </nav>
+  );
 
   return (
-    <ThemeProvider>
-      <div className="min-h-screen flex bg-slate-50 dark:bg-dark-bg text-slate-800 dark:text-slate-200">
-        
-        {/* Sidebar Component (Desktop) */}
+      <div className="app-shell flex min-h-screen text-[color:var(--app-text)]">
         <aside
           className={cn(
-            'hidden md:flex flex-col border-r border-slate-200 dark:border-dark-border bg-white dark:bg-dark-card/90 backdrop-blur-md transition-premium relative z-30 shrink-0 h-screen sticky top-0',
-            isSidebarOpen ? 'w-64' : 'w-20'
+            'sticky top-0 z-30 hidden h-screen shrink-0 flex-col border-r border-[color:var(--app-border)] bg-[color:var(--app-surface)]/95 backdrop-blur-xl transition-premium md:flex',
+            isSidebarOpen ? 'w-72' : 'w-20'
           )}
         >
-          {/* Logo Brand Header */}
-          <div className="h-16 flex items-center px-5 border-b border-slate-200 dark:border-dark-border gap-2.5">
-            <div className="w-8.5 h-8.5 rounded-lg bg-gradient-to-tr from-primary to-accent flex items-center justify-center shadow-lg shadow-primary/10 shrink-0">
-              <Flame className="w-5 h-5 text-white" />
-            </div>
+          <div className="flex h-16 items-center gap-3 border-b border-[color:var(--app-border)] px-4">
+            {branding?.logoUrl ? (
+              <img src={branding.logoUrl} alt="Workspace logo" className="h-9 w-9 shrink-0 rounded-lg object-contain" />
+            ) : (
+              <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-lg bg-primary text-white shadow-enterprise-sm">
+                <Flame className="h-5 w-5" />
+              </div>
+            )}
             {isSidebarOpen && (
-              <span className="font-display font-extrabold text-lg tracking-tight bg-gradient-to-r from-slate-900 via-slate-700 to-slate-900 dark:from-white dark:via-slate-200 dark:to-white bg-clip-text text-transparent">
-                AdPulse<span className="text-primary font-bold">.ai</span>
-              </span>
+              <div className="min-w-0">
+                <p className="truncate text-sm font-black tracking-tight">{branding?.name || 'AdPulse.ai'}</p>
+                <p className="truncate text-[11px] font-semibold text-[color:var(--app-text-muted)]">
+                  Advertising command center
+                </p>
+              </div>
             )}
           </div>
 
-          {/* Navigation Links */}
-          <nav className="flex-1 py-6 px-3.5 space-y-1.5 overflow-y-auto">
-            {sidebarItems.map((item) => {
-              const isAllowed = isItemAllowedForRole(item.name, currentRole);
-              const isActive = pathname === item.path || (item.path !== '/dashboard' && pathname?.startsWith(item.path));
-              
-              if (!isAllowed) return null;
+          {isSidebarOpen && (
+            <div className="px-4 py-4">
+              <button
+                type="button"
+                onClick={() => setIsTenantDropdownOpen(!isTenantDropdownOpen)}
+                className="focus-enterprise flex w-full items-center justify-between rounded-lg border border-[color:var(--app-border)] bg-[color:var(--app-surface-secondary)] px-3 py-2.5 text-left transition-premium hover:border-primary/35"
+              >
+                <span className="min-w-0">
+                  <span className="block truncate text-xs font-black">
+                    {activeSwitchTenantId ? activeTenantName || 'Child Tenant' : 'Master Workspace'}
+                  </span>
+                  <span className="block truncate text-[10px] font-semibold text-[color:var(--app-text-muted)]">
+                    Workspace selector
+                  </span>
+                </span>
+                <ChevronDown className="h-4 w-4 text-[color:var(--app-text-muted)]" />
+              </button>
+            </div>
+          )}
 
-              return (
-                <button
-                  key={item.name}
-                  onClick={() => router.push(item.path)}
-                  className={cn(
-                    'w-full flex items-center gap-3.5 px-3.5 py-3 text-sm font-medium rounded-xl transition-premium cursor-pointer group relative',
-                    isActive
-                      ? 'bg-primary text-white shadow-md shadow-primary/15'
-                      : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800/80 hover:text-slate-950 dark:hover:text-slate-100'
-                  )}
-                  title={!isSidebarOpen ? item.name : undefined}
-                >
-                  <item.icon className={cn('w-4.5 h-4.5 shrink-0 transition-transform duration-300 group-hover:scale-110')} />
-                  {isSidebarOpen && <span className="truncate">{item.name}</span>}
-                  
-                  {/* Tooltip on collapse */}
-                  {!isSidebarOpen && (
-                    <div className="absolute left-full ml-3 px-2 py-1 bg-slate-900 text-white text-xs font-semibold rounded-md opacity-0 group-hover:opacity-100 transition-opacity whitespace-nowrap pointer-events-none z-50">
-                      {item.name}
-                    </div>
-                  )}
-                </button>
-              );
-            })}
-          </nav>
+          <div className="flex-1 overflow-y-auto py-2">{renderNavigation()}</div>
 
-          {/* Role Status Tag (Sidebar Footer) */}
-          <div className="p-4.5 border-t border-slate-200 dark:border-dark-border">
-            <div className={cn(
-              'flex items-center gap-2 p-2.5 rounded-xl transition-premium',
-              isSidebarOpen ? 'bg-slate-50 dark:bg-slate-800/30' : 'justify-center bg-transparent'
-            )}>
-              <div className="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center text-primary text-xs font-bold shrink-0">
+          <div className="border-t border-[color:var(--app-border)] p-4">
+            <div
+              className={cn(
+                'flex items-center gap-3 rounded-lg bg-[color:var(--app-surface-secondary)] p-2.5',
+                !isSidebarOpen && 'justify-center'
+              )}
+            >
+              <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-black text-primary">
                 {currentRole[0]}
               </div>
               {isSidebarOpen && (
-                <div className="flex flex-col truncate">
-                  <span className="text-xs font-bold text-slate-800 dark:text-slate-200">
-                    {currentRole}
-                  </span>
-                  <span className="text-[9px] text-slate-400 uppercase font-semibold tracking-wider">
-                    Dynamic Mode
-                  </span>
+                <div className="min-w-0">
+                  <p className="truncate text-xs font-black">{currentRole}</p>
+                  <p className="truncate text-[10px] font-semibold text-[color:var(--app-text-muted)]">Team switcher</p>
                 </div>
               )}
             </div>
           </div>
         </aside>
 
-        {/* Sidebar Component (Mobile Drawer Overlay) */}
         {isMobileOpen && (
-          <div className="fixed inset-0 z-40 md:hidden flex">
-            {/* Backdrop */}
-            <div
-              className="absolute inset-0 bg-slate-950/60 backdrop-blur-sm"
+          <div className="fixed inset-0 z-50 md:hidden">
+            <button
+              type="button"
+              aria-label="Close navigation"
+              className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm"
               onClick={() => setIsMobileOpen(false)}
             />
-            {/* Drawer */}
-            <aside className="relative w-64 bg-white dark:bg-dark-card border-r border-slate-200 dark:border-dark-border flex flex-col h-full z-10 p-5">
-              <div className="flex items-center justify-between mb-6">
-                <div className="flex items-center gap-2.5">
-                  <div className="w-8 h-8 rounded-lg bg-gradient-to-tr from-primary to-accent flex items-center justify-center">
-                    <Flame className="w-4.5 h-4.5 text-white" />
+            <aside className="relative flex h-full w-72 flex-col border-r border-[color:var(--app-border)] bg-[color:var(--app-surface)] shadow-enterprise-lg">
+              <div className="flex h-16 items-center justify-between border-b border-[color:var(--app-border)] px-4">
+                <div className="flex items-center gap-3">
+                  <div className="flex h-9 w-9 items-center justify-center rounded-lg bg-primary text-white">
+                    <Flame className="h-5 w-5" />
                   </div>
-                  <span className="font-display font-extrabold text-base tracking-tight text-slate-900 dark:text-white">
-                    AdPulse.ai
-                  </span>
+                  <span className="font-black">{branding?.name || 'AdPulse.ai'}</span>
                 </div>
-                <button
-                  onClick={() => setIsMobileOpen(false)}
-                  className="p-1 rounded-lg hover:bg-slate-100 dark:hover:bg-slate-800 text-slate-400"
-                >
-                  <X className="w-5 h-5" />
-                </button>
+                <Button variant="ghost" size="sm" onClick={() => setIsMobileOpen(false)} title="Close navigation">
+                  <X className="h-4 w-4" />
+                </Button>
               </div>
-
-              {/* Mobile Sidebar Items */}
-              <nav className="flex-1 space-y-1.5">
-                {sidebarItems.map((item) => {
-                  const isAllowed = isItemAllowedForRole(item.name, currentRole);
-                  const isActive = pathname === item.path || (item.path !== '/dashboard' && pathname?.startsWith(item.path));
-                  
-                  if (!isAllowed) return null;
-
-                  return (
-                    <button
-                      key={item.name}
-                      onClick={() => {
-                        router.push(item.path);
-                        setIsMobileOpen(false);
-                      }}
-                      className={cn(
-                        'w-full flex items-center gap-3 px-3 py-2.5 text-sm font-medium rounded-lg transition-premium cursor-pointer',
-                        isActive
-                          ? 'bg-primary text-white shadow-md shadow-primary/10'
-                          : 'text-slate-500 dark:text-slate-400 hover:bg-slate-100 dark:hover:bg-slate-800 hover:text-slate-950 dark:hover:text-slate-100'
-                      )}
-                    >
-                      <item.icon className="w-4.5 h-4.5" />
-                      <span>{item.name}</span>
-                    </button>
-                  );
-                })}
-              </nav>
-
-              {/* Mobile Role Details */}
-              <div className="pt-4 border-t border-slate-200 dark:border-dark-border mt-auto">
-                <div className="flex items-center gap-3 p-2 bg-slate-50 dark:bg-slate-800/40 rounded-xl">
-                  <div className="w-8 h-8 rounded-full bg-primary/10 text-primary flex items-center justify-center font-bold text-xs">
-                    {currentRole[0]}
-                  </div>
-                  <div className="flex flex-col">
-                    <span className="text-xs font-bold text-slate-800 dark:text-slate-100">{currentRole}</span>
-                    <span className="text-[9px] text-slate-400 uppercase tracking-wider font-semibold">Active Profile</span>
-                  </div>
-                </div>
-              </div>
+              <div className="flex-1 overflow-y-auto py-4">{renderNavigation(true)}</div>
             </aside>
           </div>
         )}
 
-        {/* Main Content Viewport Area */}
-        <div className="flex-1 flex flex-col min-w-0 min-h-screen">
-          
-          {/* Top Navbar Header Component */}
-          <header className="h-16 flex items-center justify-between px-4 md:px-6 border-b border-slate-200 dark:border-dark-border bg-white/75 dark:bg-dark-card/75 backdrop-blur-md sticky top-0 z-20">
-            
-            {/* Left Side: Collapse/Mobile Trigger & Title */}
-            <div className="flex items-center gap-4">
-              {/* Mobile Menu Toggle */}
-              <button
-                onClick={() => setIsMobileOpen(true)}
-                className="p-1.5 rounded-lg border border-slate-200 dark:border-dark-border md:hidden text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800/80 cursor-pointer"
-              >
-                <Menu className="w-5 h-5" />
-              </button>
-
-              {/* Desktop Toggle Sidebar */}
-              <button
-                onClick={() => setIsSidebarOpen(!isSidebarOpen)}
-                className="hidden md:flex p-1.5 rounded-lg border border-slate-200 dark:border-dark-border text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800/80 cursor-pointer transition-premium"
-              >
-                <Menu className="w-4.5 h-4.5" />
-              </button>
-
-              {/* Dynamic Page Title based on path */}
-              <h2 className="text-base md:text-lg font-display font-bold text-slate-900 dark:text-slate-50 tracking-tight capitalize select-none">
-                {pathname === '/dashboard'
-                  ? 'Overview'
-                  : pathname?.split('/').pop()?.replace('-', ' ') || 'SaaS Console'}
-              </h2>
+        <div className="flex min-h-screen min-w-0 flex-1 flex-col">
+          <header className="sticky top-0 z-20 flex min-h-16 items-center justify-between gap-3 border-b border-[color:var(--app-border)] bg-[color:var(--app-surface)]/90 px-4 backdrop-blur-xl md:px-6">
+            <div className="flex min-w-0 items-center gap-3">
+              <Button variant="outline" size="sm" onClick={() => setIsMobileOpen(true)} className="md:hidden" title="Open navigation">
+                <Menu className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="sm" onClick={() => setIsSidebarOpen(!isSidebarOpen)} className="hidden md:inline-flex" title="Collapse sidebar">
+                <Menu className="h-4 w-4" />
+              </Button>
+              <div className="min-w-0">
+                <h1 className="truncate text-base font-black capitalize tracking-tight md:text-lg">{pageTitle}</h1>
+                <p className="hidden text-xs font-semibold text-[color:var(--app-text-muted)] sm:block">
+                  {activeSwitchTenantId ? `Viewing ${activeTenantName || 'child tenant'} context` : 'Master workspace'}
+                </p>
+              </div>
             </div>
 
-            {/* Right Side: Global controls, switcher & profile */}
-            <div className="flex items-center gap-3">
-              
-              {/* Dynamic Interactive Role Switcher for शिवम client feedback */}
-              <div className="relative">
-                {isDemoMode ? (
-                  <button
-                    onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
-                    className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-dark-border hover:bg-slate-200 dark:hover:bg-slate-800 text-xs font-semibold text-slate-700 dark:text-slate-200 transition-premium cursor-pointer"
+            <div className="hidden min-w-72 max-w-xl flex-1 md:block">
+              <Input
+                type="search"
+                value={searchQuery}
+                onChange={(event) => setSearchQuery(event.target.value)}
+                placeholder="Search leads, clients, invoices, campaigns..."
+              />
+            </div>
+
+            <div className="flex shrink-0 items-center gap-2">
+              {(currentRole === 'Super Admin' || currentRole === 'Agency Owner') && (
+                <div className="relative">
+                  <Button
+                    type="button"
+                    variant={activeSwitchTenantId ? 'secondary' : 'outline'}
+                    size="sm"
+                    onClick={() => setIsTenantDropdownOpen(!isTenantDropdownOpen)}
                   >
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500 animate-ping" />
-                    <span>Role: {currentRole}</span>
-                    <ChevronDown className="w-3.5 h-3.5 opacity-60" />
-                  </button>
-                ) : (
-                  <div className="flex items-center gap-2 px-3 py-1.5 rounded-full bg-slate-100 dark:bg-slate-800/80 border border-slate-200 dark:border-dark-border text-xs font-semibold text-slate-700 dark:text-slate-200">
-                    <span className="inline-block w-1.5 h-1.5 rounded-full bg-emerald-500" />
-                    <span>{currentRole}</span>
-                  </div>
-                )}
+                    <Building className="h-3.5 w-3.5" />
+                    <span className="hidden lg:inline">{activeSwitchTenantId ? activeTenantName || 'Child Tenant' : 'Workspace'}</span>
+                    <ChevronDown className="h-3.5 w-3.5" />
+                  </Button>
 
-                {isDemoMode && isRoleDropdownOpen && (
-                  <>
-                    <div
-                      className="fixed inset-0 z-40"
-                      onClick={() => setIsRoleDropdownOpen(false)}
-                    />
-                    <div className="absolute right-0 mt-2 w-72 rounded-2xl glass-panel text-slate-900 dark:text-slate-100 shadow-2xl p-4 flex flex-col gap-2 z-50 border border-slate-200 dark:border-slate-800">
-                      <div className="border-b border-slate-100 dark:border-slate-800/60 pb-2 mb-1">
-                        <span className="text-xs font-bold block text-slate-900 dark:text-white">
-                          Prototype Role Switcher
-                        </span>
-                        <p className="text-[10px] text-slate-400 leading-normal mt-0.5">
-                          Change mock roles to test adaptive sidebar layouts and security dashboard permissions instantly.
-                        </p>
-                      </div>
-
-                      <div className="grid grid-cols-1 gap-1 max-h-60 overflow-y-auto pr-1">
-                        {(['Super Admin', 'Agency Owner', 'Manager', 'Sales', 'Support', 'Client'] as UserRole[]).map((role) => (
+                  {isTenantDropdownOpen && (
+                    <>
+                      <button className="fixed inset-0 z-40" type="button" aria-label="Close workspace selector" onClick={() => setIsTenantDropdownOpen(false)} />
+                      <div className="enterprise-card absolute right-0 z-50 mt-2 w-72 p-3 shadow-enterprise-lg">
+                        <div className="mb-2 flex items-center justify-between">
+                          <span className="text-xs font-black">Workspace Selector</span>
+                          <Badge variant={activeSwitchTenantId ? 'warning' : 'primary'}>{activeSwitchTenantId ? 'Scoped' : 'Master'}</Badge>
+                        </div>
+                        <div className="flex max-h-64 flex-col gap-1 overflow-y-auto">
                           <button
-                            key={role}
-                            onClick={() => handleRoleChange(role)}
+                            type="button"
+                            onClick={() => handleTenantSwitch(null)}
                             className={cn(
-                              'w-full flex items-center justify-between px-3 py-2 rounded-xl text-left text-xs font-medium transition-premium cursor-pointer hover:bg-slate-100 dark:hover:bg-slate-800/70',
-                              currentRole === role ? 'bg-primary/10 text-primary border border-primary/20' : 'text-slate-600 dark:text-slate-300'
+                              'focus-enterprise rounded-lg px-3 py-2 text-left text-xs font-bold transition-premium hover:bg-[color:var(--app-surface-secondary)]',
+                              !activeSwitchTenantId && 'bg-primary/10 text-primary'
                             )}
                           >
-                            <span>{role}</span>
-                            {currentRole === role && (
-                              <span className="text-[9px] uppercase font-bold text-primary tracking-wider bg-primary/15 px-1.5 py-0.5 rounded-full">
-                                Active
-                              </span>
-                            )}
+                            Master Account
                           </button>
-                        ))}
+                          {childTenants.map((tenant) => (
+                            <button
+                              key={tenant.id}
+                              type="button"
+                              onClick={() => handleTenantSwitch(tenant.id)}
+                              className={cn(
+                                'focus-enterprise rounded-lg px-3 py-2 text-left text-xs font-bold transition-premium hover:bg-[color:var(--app-surface-secondary)]',
+                                activeSwitchTenantId === tenant.id && 'bg-primary/10 text-primary'
+                              )}
+                            >
+                              <span className="block truncate">{tenant.name}</span>
+                            </button>
+                          ))}
+                        </div>
                       </div>
+                    </>
+                  )}
+                </div>
+              )}
 
-                      <div className="pt-2 border-t border-slate-100 dark:border-slate-800/60 mt-1">
-                        <span className="text-[10px] font-bold text-slate-400 block mb-1">Role Description:</span>
-                        <p className="text-[10px] text-slate-400 leading-normal bg-slate-50 dark:bg-slate-800/40 p-2 rounded-lg">
-                          {activeRoleConfig.description}
-                        </p>
+              <Button variant="outline" size="sm" title="Quick actions" onClick={() => alert('Quick actions coming soon')}>
+                <Plus className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="sm" title="Global search" className="md:hidden">
+                <Search className="h-4 w-4" />
+              </Button>
+              <Button variant="outline" size="sm" onClick={toggleTheme} title={theme === 'dark' ? 'Switch to light mode' : 'Switch to dark mode'}>
+                {theme === 'dark' ? <Sun className="h-4 w-4" /> : <Moon className="h-4 w-4" />}
+              </Button>
+              <Button variant="outline" size="sm" title="Notifications">
+                <Bell className="h-4 w-4" />
+              </Button>
+
+              <div className="relative">
+                <Button
+                  type="button"
+                  variant="secondary"
+                  size="sm"
+                  onClick={() => setIsRoleDropdownOpen(!isRoleDropdownOpen)}
+                >
+                  <UserIcon className="h-4 w-4" />
+                  <span className="hidden lg:inline">{currentRole}</span>
+                  <ChevronDown className="h-3.5 w-3.5" />
+                </Button>
+
+                {isRoleDropdownOpen && (
+                  <>
+                    <button className="fixed inset-0 z-40" type="button" aria-label="Close profile menu" onClick={() => setIsRoleDropdownOpen(false)} />
+                    <div className="enterprise-card absolute right-0 z-50 mt-2 w-80 p-3 shadow-enterprise-lg">
+                      <div className="border-b border-[color:var(--app-border)] pb-3">
+                        <p className="text-sm font-black">{currentRole}</p>
+                        <p className="mt-1 text-xs text-[color:var(--app-text-muted)]">{activeRoleConfig.description}</p>
+                      </div>
+                      {isDemoMode && (
+                        <div className="grid grid-cols-2 gap-1 py-3">
+                          {(['Super Admin', 'Agency Owner', 'Manager', 'Sales', 'Support', 'Client'] as UserRole[]).map((role) => (
+                            <button
+                              key={role}
+                              type="button"
+                              onClick={() => {
+                                setRole(role);
+                                setIsRoleDropdownOpen(false);
+                              }}
+                              className={cn(
+                                'focus-enterprise rounded-lg px-3 py-2 text-left text-xs font-bold transition-premium hover:bg-[color:var(--app-surface-secondary)]',
+                                currentRole === role && 'bg-primary/10 text-primary'
+                              )}
+                            >
+                              {role}
+                            </button>
+                          ))}
+                        </div>
+                      )}
+                      <div className="flex gap-2 pt-3">
+                        <Button variant="ghost" size="sm" className="flex-1">
+                          <HelpCircle className="h-4 w-4" />
+                          Help
+                        </Button>
+                        <Button variant="danger" size="sm" className="flex-1" onClick={handleLogout}>
+                          Logout
+                        </Button>
                       </div>
                     </div>
                   </>
                 )}
               </div>
-
-              {/* Theme Toggle (Light/Dark Mode) */}
-              <button
-                onClick={toggleTheme}
-                className="p-2 rounded-xl border border-slate-200 dark:border-dark-border text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800/80 cursor-pointer transition-premium relative overflow-hidden group shadow-sm"
-                title={theme === 'dark' ? 'Switch to Light Mode' : 'Switch to Dark Mode'}
-              >
-                {theme === 'dark' ? (
-                  <Sun className="w-4.5 h-4.5 text-amber-400 transition-transform duration-300 group-hover:rotate-45" />
-                ) : (
-                  <Moon className="w-4.5 h-4.5 text-indigo-500 transition-transform duration-300 group-hover:-rotate-12" />
-                )}
-              </button>
-
-              {/* Notifications bell */}
-              <button className="p-2 rounded-xl border border-slate-200 dark:border-dark-border text-slate-500 hover:bg-slate-100 dark:hover:bg-slate-800/80 cursor-pointer shadow-sm relative">
-                <Bell className="w-4.5 h-4.5" />
-                <span className="absolute top-1.5 right-1.5 w-2 h-2 rounded-full bg-primary" />
-              </button>
-
-              {/* User Avatar & Settings Drawer Shortcut */}
-              <div className="h-9 w-px bg-slate-200 dark:bg-dark-border" />
-              
-              <div className="flex items-center gap-2">
-                <button
-                  onClick={handleLogout}
-                  className="w-8.5 h-8.5 rounded-full bg-gradient-to-tr from-slate-200 to-slate-300 dark:from-slate-800 dark:to-slate-700 hover:scale-105 border border-slate-300 dark:border-slate-700 flex items-center justify-center font-display font-bold text-xs tracking-tight shadow-md cursor-pointer transition-premium"
-                  title="Logout"
-                >
-                  SG
-                </button>
-              </div>
             </div>
           </header>
 
-          {/* Main Module Layout Page Container */}
-          <main className="flex-1 overflow-y-auto p-4 md:p-6 bg-slate-50/50 dark:bg-dark-bg/40">
-            {children}
+          <main className="flex-1 overflow-y-auto p-[var(--app-space-page)]">
+            <div className="mx-auto w-full max-w-[1600px]">{children}</div>
           </main>
         </div>
       </div>
-    </ThemeProvider>
   );
 }

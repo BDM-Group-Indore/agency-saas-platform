@@ -11,6 +11,15 @@ model Tenant {
   id                    String                 @id @default(cuid())
   name                  String
   domain                String?                @unique
+  wabaPhoneNumberId     String?                @unique
+  parentId              String?
+  parent                Tenant?                @relation("TenantHierarchy", fields: [parentId], references: [id], onDelete: SetNull)
+  children              Tenant[]               @relation("TenantHierarchy")
+  logoUrl               String?
+  primaryColor          String?                @default("#3b82f6")
+  secondaryColor        String?                @default("#1f2937")
+  companyName           String?
+  supportEmail          String?
   users                 User[]
   companies             Company[]
   contacts              Contact[]
@@ -25,9 +34,11 @@ model Tenant {
   invoices              Invoice[]
   subscription          TenantSubscription?
   promptTemplates       PromptTemplate[]
+  paymentTransactions   PaymentTransaction[]
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 }
+
 
 
 model User {
@@ -305,25 +316,53 @@ model TenantSubscription {
 }
 
 model Invoice {
-  id            String   @id @default(cuid())
-  invoiceNumber String   @unique // INV-0001
+  id            String               @id @default(cuid())
+  invoiceNumber String               // INV-0001 (unique per tenant)
   tenantId      String
-  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  tenant        Tenant               @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   clientName    String
   clientEmail   String?
   amount        Float
-  currency      String   @default("USD")
-  status        String   @default("DRAFT") // DRAFT, SENT, PAID, VOID, OVERDUE
+  currency      String               @default("USD")
+  status        String               @default("DRAFT") // DRAFT, SENT, PAID, VOID, OVERDUE
   dueDate       DateTime
   paidAt        DateTime?
-  lineItems     Json     // [{ description, quantity, unitPrice, total }]
+  lineItems     Json                 // [{ description, quantity, unitPrice, total }]
   notes         String?
-  createdAt     DateTime @default(now())
-  updatedAt     DateTime @updatedAt
+  businessGstin String?
+  clientGstin   String?
+  cgst          Float?
+  sgst          Float?
+  igst          Float?
+  taxAmount     Float?
+  payments      PaymentTransaction[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
 
+  @@unique([tenantId, invoiceNumber])
   @@index([tenantId])
   @@index([status])
   @@index([dueDate])
+}
+
+model PaymentTransaction {
+  id                   String    @id @default(cuid())
+  invoiceId            String
+  invoice              Invoice   @relation(fields: [invoiceId], references: [id], onDelete: Cascade)
+  amount               Float
+  status               String    @default("PENDING") // PENDING, SUCCESS, FAILED
+  paymentMethod        String    // STRIPE, RAZORPAY, CASH, BANK_TRANSFER
+  gatewayTransactionId String?
+  gatewayResponse      Json?
+  paidAt               DateTime?
+  tenantId             String
+  tenant               Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt            DateTime  @default(now())
+  updatedAt            DateTime  @updatedAt
+
+  @@index([invoiceId])
+  @@index([tenantId])
+  @@index([status])
 }
 
 // ─── Phase 6: AI Prompt Library ──────────────────────────────────────────────

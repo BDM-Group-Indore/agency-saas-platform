@@ -11,6 +11,21 @@ jobs:
     name: Lint & Build Verification
     runs-on: ubuntu-latest
 
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: postgres
+          POSTGRES_PASSWORD: password
+          POSTGRES_DB: shadow_db
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+
     steps:
     - name: Checkout Code repository
       uses: actions/checkout@v4
@@ -39,6 +54,9 @@ jobs:
 
     - name: Install all Workspace Dependencies
       run: pnpm install --frozen-lockfile
+
+    - name: Verify Prisma migrations are in sync with schema
+      run: pnpm --filter @saas/database exec prisma migrate diff --from-migrations prisma/migrations --to-schema-datamodel prisma/schema.prisma --shadow-database-url "postgresql://postgres:password@localhost:5432/shadow_db?schema=public" --exit-code
 
     - name: Run Database schema generators
       run: pnpm --filter @saas/database run prisma:generate

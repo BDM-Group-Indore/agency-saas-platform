@@ -20,12 +20,24 @@ import {
   Trash2,
   Loader2,
   Save,
-  Grid
+  Grid,
+  Palette,
+  Building2,
+  Globe
 } from 'lucide-react';
 import { apiRequest } from '@/lib/api';
 
 export default function SettingsPage() {
-  const [activeTab, setActiveTab] = useState<'general' | 'ai'>('general');
+  const [activeTab, setActiveTab] = useState<'general' | 'ai' | 'branding'>('general');
+
+  // White Label Branding States
+  const [brandLogoUrl, setBrandLogoUrl] = useState('');
+  const [brandPrimaryColor, setBrandPrimaryColor] = useState('#3b82f6');
+  const [brandSecondaryColor, setBrandSecondaryColor] = useState('#1f2937');
+  const [brandCompanyName, setBrandCompanyName] = useState('');
+  const [brandSupportEmail, setBrandSupportEmail] = useState('');
+  const [isLoadingBranding, setIsLoadingBranding] = useState(false);
+  const [isSavingBranding, setIsSavingBranding] = useState(false);
 
   // General Settings States
   const [googleAdsConnected, setGoogleAdsConnected] = useState(true);
@@ -61,20 +73,13 @@ export default function SettingsPage() {
   const [formUserPrompt, setFormUserPrompt] = useState('');
   const [isSavingPrompt, setIsSavingPrompt] = useState(false);
 
-  useEffect(() => {
-    if (activeTab === 'ai') {
-      fetchAgentConfig();
-      fetchPrompts();
-    }
-  }, [activeTab]);
-
   const handleCopyKey = () => {
     setIsCopied(true);
     setTimeout(() => setIsCopied(false), 1500);
   };
 
   // AI Agent Config APIs
-  const fetchAgentConfig = async () => {
+  async function fetchAgentConfig() {
     setIsLoadingAgent(true);
     try {
       const data = await apiRequest('/ai/agent/config');
@@ -86,7 +91,7 @@ export default function SettingsPage() {
     } finally {
       setIsLoadingAgent(false);
     }
-  };
+  }
 
   const handleSaveAgentConfig = async () => {
     setIsSavingAgent(true);
@@ -108,8 +113,7 @@ export default function SettingsPage() {
     }
   };
 
-  // Prompt Library APIs
-  const fetchPrompts = async () => {
+  async function fetchPrompts() {
     setIsLoadingPrompts(true);
     try {
       const data = await apiRequest('/ai/prompts');
@@ -120,7 +124,58 @@ export default function SettingsPage() {
       setIsLoadingPrompts(true); // wait, let's set to false!
       setIsLoadingPrompts(false);
     }
+  }
+
+  async function fetchBranding() {
+    setIsLoadingBranding(true);
+    try {
+      const data = await apiRequest('/enterprise/branding');
+      setBrandLogoUrl(data.logoUrl || '');
+      setBrandPrimaryColor(data.primaryColor || '#3b82f6');
+      setBrandSecondaryColor(data.secondaryColor || '#1f2937');
+      setBrandCompanyName(data.companyName || '');
+      setBrandSupportEmail(data.supportEmail || '');
+    } catch (err) {
+      console.error('Failed to fetch branding:', err);
+    } finally {
+      setIsLoadingBranding(false);
+    }
+  }
+
+  const handleSaveBranding = async () => {
+    setIsSavingBranding(true);
+    try {
+      await apiRequest('/enterprise/branding', {
+        method: 'PATCH',
+        body: JSON.stringify({
+          logoUrl: brandLogoUrl || undefined,
+          primaryColor: brandPrimaryColor,
+          secondaryColor: brandSecondaryColor,
+          companyName: brandCompanyName || undefined,
+          supportEmail: brandSupportEmail || undefined,
+        }),
+      });
+      if (typeof document !== 'undefined') {
+        document.documentElement.style.setProperty('--primary', brandPrimaryColor);
+      }
+      alert('White label branding saved successfully! Refresh the page to see logo/name changes take effect.');
+    } catch (err) {
+      console.error('Failed to save branding:', err);
+      alert('Failed to save branding. Check API connection.');
+    } finally {
+      setIsSavingBranding(false);
+    }
   };
+
+  useEffect(() => {
+    if (activeTab === 'ai') {
+      fetchAgentConfig();
+      fetchPrompts();
+    }
+    if (activeTab === 'branding') {
+      fetchBranding();
+    }
+  }, [activeTab]);
 
   const handleCreatePrompt = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -245,6 +300,16 @@ export default function SettingsPage() {
             }`}
           >
             <Sparkles className="w-3.5 h-3.5" /> AI Autopilot & Prompts
+          </button>
+          <button
+            onClick={() => setActiveTab('branding')}
+            className={`px-4 py-1.5 rounded-lg text-xs font-semibold transition-premium flex items-center gap-1.5 cursor-pointer ${
+              activeTab === 'branding'
+                ? 'bg-white dark:bg-slate-700 text-slate-900 dark:text-white shadow-sm'
+                : 'text-slate-500 dark:text-slate-400 hover:text-slate-700 dark:hover:text-slate-200'
+            }`}
+          >
+            <Palette className="w-3.5 h-3.5" /> White Label
           </button>
         </div>
       </div>
@@ -380,7 +445,7 @@ export default function SettingsPage() {
             </Card>
           </div>
         </div>
-      ) : (
+      ) : activeTab === 'ai' ? (
         /* AI & Autopilot Options View */
         <div className="flex flex-col gap-6">
           
@@ -599,7 +664,171 @@ export default function SettingsPage() {
           </Card>
 
         </div>
-      )}
+      ) : activeTab === 'branding' ? (
+        /* White Label Branding Tab */
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
+
+          {/* Branding Form */}
+          <div className="lg:col-span-2 flex flex-col gap-6">
+            <Card className="flex flex-col gap-5">
+              <div className="flex items-center justify-between border-b border-slate-200 dark:border-dark-border pb-3">
+                <div>
+                  <h3 className="font-display font-bold text-base text-slate-900 dark:text-slate-50 flex items-center gap-1.5">
+                    <Building2 className="w-5 h-5 text-primary" /> Company Identity
+                  </h3>
+                  <p className="text-xs text-slate-400 mt-0.5">
+                    Customize the platform appearance for your clients and sub-tenants.
+                  </p>
+                </div>
+                <Button variant="primary" size="sm" onClick={handleSaveBranding} disabled={isSavingBranding || isLoadingBranding}>
+                  {isSavingBranding ? <Loader2 className="w-3.5 h-3.5 mr-1.5 animate-spin" /> : <Save className="w-3.5 h-3.5 mr-1.5" />}
+                  Save Branding
+                </Button>
+              </div>
+
+              {isLoadingBranding ? (
+                <div className="flex flex-col items-center justify-center py-8 gap-2">
+                  <Loader2 className="w-6 h-6 text-primary animate-spin" />
+                  <span className="text-xs text-slate-400">Loading branding configuration...</span>
+                </div>
+              ) : (
+                <div className="flex flex-col gap-4">
+                  <Input
+                    label="Company Display Name"
+                    type="text"
+                    placeholder="e.g. Acme Marketing Agency"
+                    value={brandCompanyName}
+                    onChange={(e) => setBrandCompanyName(e.target.value)}
+                  />
+
+                  <div className="flex items-center gap-2 p-3 bg-amber-50 dark:bg-amber-900/10 border border-amber-200 dark:border-amber-800/30 rounded-xl">
+                    <Globe className="w-4 h-4 text-amber-600 shrink-0" />
+                    <span className="text-xs text-amber-700 dark:text-amber-400">
+                      This name will replace "AdPulse" in the sidebar header and browser tab for all users under this tenant.
+                    </span>
+                  </div>
+
+                  <Input
+                    label="Logo Image URL"
+                    type="url"
+                    placeholder="https://cdn.example.com/logo.png"
+                    value={brandLogoUrl}
+                    onChange={(e) => setBrandLogoUrl(e.target.value)}
+                  />
+
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Primary Brand Color
+                      </label>
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="color"
+                          value={brandPrimaryColor}
+                          onChange={(e) => setBrandPrimaryColor(e.target.value)}
+                          className="w-10 h-10 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer bg-transparent p-0.5"
+                        />
+                        <input
+                          type="text"
+                          value={brandPrimaryColor}
+                          onChange={(e) => setBrandPrimaryColor(e.target.value)}
+                          placeholder="#3b82f6"
+                          className="flex-1 text-xs rounded-xl border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-card/50 text-slate-900 dark:text-slate-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 font-mono"
+                        />
+                      </div>
+                    </div>
+
+                    <div className="flex flex-col gap-1.5">
+                      <label className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+                        Secondary Brand Color
+                      </label>
+                      <div className="flex gap-2 items-center">
+                        <input
+                          type="color"
+                          value={brandSecondaryColor}
+                          onChange={(e) => setBrandSecondaryColor(e.target.value)}
+                          className="w-10 h-10 rounded-lg border border-slate-200 dark:border-slate-700 cursor-pointer bg-transparent p-0.5"
+                        />
+                        <input
+                          type="text"
+                          value={brandSecondaryColor}
+                          onChange={(e) => setBrandSecondaryColor(e.target.value)}
+                          placeholder="#1f2937"
+                          className="flex-1 text-xs rounded-xl border border-slate-200 dark:border-dark-border bg-slate-50 dark:bg-dark-card/50 text-slate-900 dark:text-slate-100 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-primary/20 font-mono"
+                        />
+                      </div>
+                    </div>
+                  </div>
+
+                  <Input
+                    label="Support Email"
+                    type="email"
+                    placeholder="support@yourcompany.com"
+                    value={brandSupportEmail}
+                    onChange={(e) => setBrandSupportEmail(e.target.value)}
+                  />
+                </div>
+              )}
+            </Card>
+          </div>
+
+          {/* Live Branding Preview */}
+          <div className="flex flex-col gap-4">
+            <Card className="flex flex-col gap-4">
+              <div className="border-b border-slate-200 dark:border-dark-border pb-3">
+                <h3 className="font-display font-bold text-base text-slate-900 dark:text-slate-50 flex items-center gap-1.5">
+                  <Palette className="w-4.5 h-4.5 text-primary" /> Live Preview
+                </h3>
+                <p className="text-xs text-slate-400 mt-0.5">Approximation of how your branding will look.</p>
+              </div>
+
+              {/* Mini Sidebar Preview */}
+              <div className="rounded-xl border border-slate-200 dark:border-dark-border overflow-hidden">
+                <div
+                  className="h-10 flex items-center px-3 gap-2 text-white text-xs font-bold"
+                  style={{ background: `linear-gradient(135deg, ${brandPrimaryColor}, ${brandSecondaryColor})` }}
+                >
+                  {brandLogoUrl ? (
+                    <img src={brandLogoUrl} alt="logo" className="w-5 h-5 rounded object-contain" />
+                  ) : (
+                    <div className="w-5 h-5 rounded bg-white/30 flex items-center justify-center text-white font-extrabold text-[10px]">
+                      {(brandCompanyName || 'A')[0]}
+                    </div>
+                  )}
+                  <span className="truncate">{brandCompanyName || 'Your Company'}</span>
+                </div>
+
+                <div className="bg-white dark:bg-slate-900 p-3 flex flex-col gap-1.5">
+                  {['Dashboard', 'Leads', 'CRM', 'Billing'].map((item, i) => (
+                    <div
+                      key={item}
+                      className="px-2 py-1.5 rounded-lg text-xs font-medium"
+                      style={i === 0 ? { background: brandPrimaryColor + '20', color: brandPrimaryColor } : { color: '#94a3b8' }}
+                    >
+                      {item}
+                    </div>
+                  ))}
+                </div>
+              </div>
+
+              {/* Color Swatches */}
+              <div className="flex flex-col gap-2">
+                <span className="text-[10px] uppercase font-bold tracking-wider text-slate-400">Color Palette</span>
+                <div className="flex gap-2">
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="w-10 h-10 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700" style={{ background: brandPrimaryColor }} />
+                    <span className="text-[9px] font-mono text-slate-400">{brandPrimaryColor}</span>
+                  </div>
+                  <div className="flex flex-col items-center gap-1">
+                    <div className="w-10 h-10 rounded-xl shadow-sm border border-slate-200 dark:border-slate-700" style={{ background: brandSecondaryColor }} />
+                    <span className="text-[9px] font-mono text-slate-400">{brandSecondaryColor}</span>
+                  </div>
+                </div>
+              </div>
+            </Card>
+          </div>
+        </div>
+      ) : null}
 
       {/* CREATE PROMPT MODAL */}
       <Modal

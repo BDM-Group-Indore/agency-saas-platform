@@ -263,7 +263,7 @@ export default function WhatsAppPage() {
 
     try {
       setSimulating(true);
-      const res = await apiRequest('/whatsapp/webhook', {
+      const res = await apiRequest('/whatsapp/simulate-webhook', {
         method: 'POST',
         body: JSON.stringify({
           phoneNumber: simPhone.trim(),

@@ -12,20 +12,18 @@ export const Button = React.forwardRef<HTMLButtonElement, ButtonProps>(
       <button
         ref={ref}
         className={cn(
-          'inline-flex items-center justify-center rounded-lg font-medium transition-premium focus:outline-none focus:ring-2 focus:ring-primary/50 disabled:opacity-50 disabled:pointer-events-none cursor-pointer',
-          // Size Styles
+          'focus-enterprise inline-flex items-center justify-center gap-2 rounded-lg font-bold transition-premium disabled:pointer-events-none disabled:opacity-50 cursor-pointer',
           {
-            'px-3 py-1.5 text-xs': size === 'sm',
-            'px-4 py-2.5 text-sm': size === 'md',
-            'px-6 py-3.5 text-base': size === 'lg',
+            'min-h-8 px-3 py-1.5 text-xs': size === 'sm',
+            'min-h-10 px-4 py-2.5 text-sm': size === 'md',
+            'min-h-12 px-5 py-3 text-base': size === 'lg',
           },
-          // Variant Styles
           {
-            'bg-primary text-white hover:bg-primary-hover shadow-md hover:shadow-lg shadow-primary/10 hover:scale-[1.01] active:scale-[0.99]': variant === 'primary',
-            'bg-slate-100 dark:bg-slate-800 text-slate-900 dark:text-slate-100 hover:bg-slate-200 dark:hover:bg-slate-700': variant === 'secondary',
-            'border border-slate-200 dark:border-dark-border bg-transparent text-slate-700 dark:text-slate-300 hover:bg-slate-50 dark:hover:bg-slate-900': variant === 'outline',
-            'bg-danger text-white hover:bg-red-600 shadow-md hover:shadow-lg shadow-danger/10': variant === 'danger',
-            'bg-transparent text-slate-700 dark:text-slate-300 hover:bg-slate-100 dark:hover:bg-slate-800/80': variant === 'ghost',
+            'bg-primary text-white shadow-enterprise-sm hover:bg-primary-hover hover:shadow-enterprise-md hover:-translate-y-px active:translate-y-0': variant === 'primary',
+            'border border-[color:var(--app-border)] bg-[color:var(--app-surface-secondary)] text-[color:var(--app-text)] hover:bg-[color:var(--app-surface)]': variant === 'secondary',
+            'border border-[color:var(--app-border)] bg-[color:var(--app-surface)] text-[color:var(--app-text)] shadow-enterprise-xs hover:border-primary/40 hover:text-primary': variant === 'outline',
+            'bg-danger text-white shadow-enterprise-sm hover:brightness-95 hover:shadow-enterprise-md': variant === 'danger',
+            'bg-transparent text-[color:var(--app-text-muted)] hover:bg-[color:var(--app-surface-secondary)] hover:text-[color:var(--app-text)]': variant === 'ghost',
           },
           className
         )}

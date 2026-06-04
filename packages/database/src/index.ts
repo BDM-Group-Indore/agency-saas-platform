@@ -18,5 +18,6 @@ export {
   TenantSubscription,
   Invoice,
   PromptTemplate,
+  PaymentTransaction,
 } from '@prisma/client';
 

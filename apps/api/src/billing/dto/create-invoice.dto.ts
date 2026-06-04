@@ -52,4 +52,19 @@ export class CreateInvoiceDto {
   @IsOptional()
   @IsString()
   notes?: string;
+
+  @ApiPropertyOptional({ example: '23AAAAA1111A1Z1', description: 'Business GSTIN' })
+  @IsOptional()
+  @IsString()
+  businessGstin?: string;
+
+  @ApiPropertyOptional({ example: '23BBBBB2222B2Z2', description: 'Client/Receiver GSTIN' })
+  @IsOptional()
+  @IsString()
+  clientGstin?: string;
+
+  @ApiPropertyOptional({ example: 18, description: 'GST Tax rate percentage (defaults to 18%)' })
+  @IsOptional()
+  @IsNumber()
+  taxRate?: number;
 }

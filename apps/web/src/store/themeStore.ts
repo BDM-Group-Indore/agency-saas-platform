@@ -7,7 +7,7 @@ interface ThemeState {
 }
 
 export const useThemeStore = create<ThemeState>((set) => ({
-  theme: 'dark', // Premium default is dark
+  theme: 'light',
   setTheme: (theme) => {
     if (typeof window !== 'undefined') {
       const root = window.document.documentElement;

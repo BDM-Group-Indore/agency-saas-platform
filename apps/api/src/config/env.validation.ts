@@ -39,6 +39,18 @@ class EnvironmentVariables {
 
   @IsString()
   JWT_REFRESH_EXPIRATION: string = '7d';
+
+  @IsString()
+  @IsOptional()
+  WHATSAPP_APP_SECRET?: string;
+
+  @IsString()
+  @IsOptional()
+  WHATSAPP_VERIFY_TOKEN?: string;
+
+  @IsString()
+  @IsOptional()
+  CORS_ALLOWED_ORIGINS?: string;
 }
 
 export function validate(config: Record<string, any>) {

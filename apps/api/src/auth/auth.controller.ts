@@ -1,5 +1,7 @@
-import { Controller, Post, Body, UseGuards, Get, HttpCode, HttpStatus, Request } from '@nestjs/common';
+import { Controller, Post, Body, UseGuards, Get, HttpCode, HttpStatus, Request, Res } from '@nestjs/common';
 import { ApiBearerAuth, ApiOperation, ApiResponse, ApiTags } from '@nestjs/swagger';
+import { Response } from 'express';
+import * as crypto from 'crypto';
 import { AuthService } from './auth.service';
 import { RegisterDto } from './dto/register.dto';
 import { LoginDto } from './dto/login.dto';
@@ -14,19 +16,54 @@ import { UserRole } from '@saas/shared-types';
 export class AuthController {
   constructor(private authService: AuthService) {}
 
+  private setCookies(res: Response, tokens: { accessToken: string; refreshToken: string }) {
+    const isProd = process.env.NODE_ENV === 'production';
+    const csrfToken = crypto.randomBytes(32).toString('hex');
+
+    res.cookie('access_token', tokens.accessToken, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: 'lax',
+      maxAge: 15 * 60 * 1000, // 15 mins
+      path: '/',
+    });
+
+    res.cookie('refresh_token', tokens.refreshToken, {
+      httpOnly: true,
+      secure: isProd,
+      sameSite: 'lax',
+      maxAge: 7 * 24 * 60 * 60 * 1000, // 7 days
+      path: '/',
+    });
+
+    res.cookie('csrf_token', csrfToken, {
+      httpOnly: false,
+      secure: isProd,
+      sameSite: 'lax',
+      maxAge: 15 * 60 * 1000, // 15 mins
+      path: '/',
+    });
+
+    return csrfToken;
+  }
+
   @Post('register')
   @ApiOperation({ summary: 'Register a new user and tenant' })
   @ApiResponse({ status: 201, description: 'User successfully registered' })
-  async register(@Body() dto: RegisterDto) {
-    return this.authService.register(dto);
+  async register(@Body() dto: RegisterDto, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.register(dto);
+    const csrfToken = this.setCookies(res, result);
+    return { user: result.user, csrfToken };
   }
 
   @Post('login')
   @HttpCode(HttpStatus.OK)
   @ApiOperation({ summary: 'Login with email and password' })
   @ApiResponse({ status: 200, description: 'User successfully logged in' })
-  async login(@Body() dto: LoginDto) {
-    return this.authService.login(dto);
+  async login(@Body() dto: LoginDto, @Res({ passthrough: true }) res: Response) {
+    const result = await this.authService.login(dto);
+    const csrfToken = this.setCookies(res, result);
+    return { user: result.user, csrfToken };
   }
 
   @UseGuards(JwtRefreshGuard)
@@ -34,9 +71,11 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Refresh access token using refresh token' })
-  async refresh(@Request() req: any) {
+  async refresh(@Request() req: any, @Res({ passthrough: true }) res: Response) {
     const { id, refreshToken } = req.user;
-    return this.authService.refresh(id, refreshToken);
+    const result = await this.authService.refresh(id, refreshToken);
+    const csrfToken = this.setCookies(res, result);
+    return { user: result.user, csrfToken };
   }
 
   @UseGuards(JwtAuthGuard)
@@ -44,9 +83,15 @@ export class AuthController {
   @HttpCode(HttpStatus.OK)
   @ApiBearerAuth()
   @ApiOperation({ summary: 'Logout and invalidate refresh token' })
-  async logout(@Request() req: any) {
-    const refreshToken = req.body.refreshToken || req.headers['x-refresh-token'] || '';
+  async logout(@Request() req: any, @Res({ passthrough: true }) res: Response) {
+    const refreshToken = req.cookies?.refresh_token || req.body.refreshToken || req.headers['x-refresh-token'] || '';
     await this.authService.logout(req.user.id, refreshToken);
+
+    const isProd = process.env.NODE_ENV === 'production';
+    res.clearCookie('access_token', { httpOnly: true, secure: isProd, sameSite: 'lax', path: '/' });
+    res.clearCookie('refresh_token', { httpOnly: true, secure: isProd, sameSite: 'lax', path: '/' });
+    res.clearCookie('csrf_token', { httpOnly: false, secure: isProd, sameSite: 'lax', path: '/' });
+
     return { message: 'Logged out successfully' };
   }
 

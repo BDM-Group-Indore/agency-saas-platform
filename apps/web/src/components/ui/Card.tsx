@@ -10,7 +10,7 @@ export const Card = ({ className, children, ...props }: CardProps) => {
   return (
     <div
       className={cn(
-        'glass-panel rounded-xl p-5 transition-premium hover:shadow-lg hover:border-slate-300 dark:hover:border-slate-700/80',
+        'enterprise-card enterprise-card-hover p-5',
         className
       )}
       {...props}
@@ -34,18 +34,17 @@ interface StatsCardProps extends React.HTMLAttributes<HTMLDivElement> {
 export const StatsCard = ({ title, value, icon, trend, subtitle, className, ...props }: StatsCardProps) => {
   return (
     <Card className={cn('relative overflow-hidden group', className)} {...props}>
-      <div className="absolute top-0 right-0 w-24 h-24 bg-primary/5 rounded-full blur-2xl group-hover:bg-primary/10 transition-colors pointer-events-none" />
       <div className="flex items-start justify-between">
         <div className="flex flex-col gap-1">
-          <span className="text-xs font-semibold uppercase tracking-wider text-slate-500 dark:text-slate-400">
+          <span className="text-xs font-bold uppercase tracking-wide text-[color:var(--app-text-muted)]">
             {title}
           </span>
-          <span className="text-2xl md:text-3xl font-display font-bold tracking-tight text-slate-900 dark:text-slate-50">
+          <span className="text-2xl md:text-3xl font-display font-black tracking-tight text-[color:var(--app-text)]">
             {value}
           </span>
         </div>
         {icon && (
-          <div className="p-2.5 rounded-lg bg-slate-100 dark:bg-slate-800/80 text-primary dark:text-primary transition-colors group-hover:scale-110 duration-300">
+          <div className="rounded-lg border border-primary/15 bg-primary/10 p-2.5 text-primary transition-premium group-hover:scale-105">
             {icon}
           </div>
         )}
@@ -66,7 +65,7 @@ export const StatsCard = ({ title, value, icon, trend, subtitle, className, ...p
           </span>
         )}
         {subtitle && (
-          <span className="text-xs text-slate-400 dark:text-slate-500 font-medium">
+          <span className="text-xs font-medium text-[color:var(--app-text-muted)]">
             {subtitle}
           </span>
         )}
@@ -97,29 +96,29 @@ export const ProfileCard = ({ name, role, email, avatarUrl, status = 'active', c
           <img
             src={avatarUrl}
             alt={name}
-            className="w-12 h-12 rounded-full object-cover border border-slate-200 dark:border-dark-border"
+            className="w-12 h-12 rounded-full object-cover border border-[color:var(--app-border)]"
           />
         ) : (
-          <div className="w-12 h-12 rounded-full bg-gradient-to-tr from-primary to-accent text-white font-display font-semibold flex items-center justify-center text-sm shadow-md">
+          <div className="w-12 h-12 rounded-full bg-primary text-white font-display font-semibold flex items-center justify-center text-sm shadow-enterprise-sm">
             {initials}
           </div>
         )}
         <span
           className={cn(
-            'absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-white dark:border-dark-card',
-            status === 'active' ? 'bg-emerald-500' : 'bg-slate-400'
+            'absolute bottom-0 right-0 w-3 h-3 rounded-full border-2 border-[color:var(--app-surface)]',
+            status === 'active' ? 'bg-success' : 'bg-[color:var(--app-text-muted)]'
           )}
         />
       </div>
 
       <div className="flex flex-col">
-        <span className="font-semibold text-slate-900 dark:text-slate-100 text-sm leading-tight">
+        <span className="font-semibold text-[color:var(--app-text)] text-sm leading-tight">
           {name}
         </span>
-        <span className="text-xs text-primary dark:text-primary/90 font-medium">
+        <span className="text-xs text-primary font-medium">
           {role}
         </span>
-        <span className="text-xs text-slate-400 dark:text-slate-500 mt-0.5">
+        <span className="text-xs text-[color:var(--app-text-muted)] mt-0.5">
           {email}
         </span>
       </div>

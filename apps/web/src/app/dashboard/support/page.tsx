@@ -63,7 +63,7 @@ export default function SupportPage() {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
   }, [messages, isSending]);
 
-  const fetchConversations = async () => {
+  async function fetchConversations() {
     setIsLoadingConvos(true);
     try {
       const data = await apiRequest('/ai/chat/conversations');
@@ -78,7 +78,7 @@ export default function SupportPage() {
     }
   };
 
-  const fetchMessages = async (convoId: string) => {
+  async function fetchMessages(convoId: string) {
     setIsLoadingMessages(true);
     try {
       const data = await apiRequest(`/ai/chat/conversations/${convoId}/messages`);

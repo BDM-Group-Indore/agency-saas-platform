@@ -1,5 +1,8 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { ConfigService } from '@nestjs/config';
+import * as crypto from 'crypto';
 import { PrismaService } from '../database/prisma.service';
+import { RedisService } from '../redis/redis.service';
 import { SendMessageDto } from './dto/send-message.dto';
 import { CreateTemplateDto } from './dto/create-template.dto';
 import { CreateBroadcastDto } from './dto/create-broadcast.dto';
@@ -17,7 +20,11 @@ import { WhatsAppConversation, WhatsAppMessage, WhatsAppTemplate, WhatsAppBroadc
 
 @Injectable()
 export class WhatsappService {
-  constructor(private prisma: PrismaService) {}
+  constructor(
+    private prisma: PrismaService,
+    private readonly configService: ConfigService,
+    private readonly redisService: RedisService,
+  ) {}
 
   // 1. Fetch Conversations (Inbox)
   async getConversations(query: PaginationQueryDto, tenantId: string): Promise<{ data: any[]; meta: any }> {
@@ -280,63 +287,42 @@ export class WhatsappService {
     });
   }
 
-  // 9. Public Webhook (Inbound Bot Engine Responder Simulation)
-  async receiveWebhook(dto: ReceiveWebhookDto): Promise<WhatsAppMessage> {
-    // 1. Deduce tenant id
-    let tenantId: string | null = null;
-
-    // A. Check existing conversation
-    const existingConv = await this.prisma.whatsAppConversation.findFirst({
-      where: { phoneNumber: dto.phoneNumber },
-    });
-
-    if (existingConv) {
-      tenantId = existingConv.tenantId;
-    } else {
-      // B. Check contact directory
-      const contact = await this.prisma.contact.findFirst({
-        where: { phone: dto.phoneNumber },
-      });
-      if (contact) {
-        tenantId = contact.tenantId;
-      } else {
-        // C. Fallback: retrieve first tenant
-        const defaultTenant = await this.prisma.tenant.findFirst();
-        if (!defaultTenant) {
-          throw new BadRequestException('No tenant exists to handle webhook message');
-        }
-        tenantId = defaultTenant.id;
-      }
-    }
-
-    // 2. Fetch or create conversation
+  // 9. Reusable Dry Helper to process incoming messages and run Bot Engine auto-replies
+  async processInboundMessage(phoneNumber: string, bodyText: string, tenantId: string): Promise<WhatsAppMessage> {
+    // 1. Fetch or create conversation
     let conversation = await this.prisma.whatsAppConversation.findFirst({
-      where: { phoneNumber: dto.phoneNumber, tenantId },
+      where: { phoneNumber, tenantId },
     });
 
     if (!conversation) {
+      // Check contact directory scoped to this tenant
+      const contact = await this.prisma.contact.findFirst({
+        where: { phone: phoneNumber, tenantId },
+      });
+
       conversation = await this.prisma.whatsAppConversation.create({
         data: {
-          phoneNumber: dto.phoneNumber,
+          phoneNumber,
           tenantId,
+          contactId: contact?.id || null,
           status: WhatsAppConversationStatus.OPEN,
         },
       });
     }
 
-    // 3. Log inbound message
+    // 2. Log inbound message
     await this.prisma.whatsAppMessage.create({
       data: {
         conversationId: conversation.id,
         direction: WhatsAppMessageDirection.INBOUND,
-        body: dto.body,
+        body: bodyText,
         type: WhatsAppMessageType.TEXT,
         status: WhatsAppMessageStatus.READ,
       },
     });
 
-    // 4. Bot Engine auto-reply decision
-    const input = dto.body.toLowerCase().trim();
+    // 3. Bot Engine auto-reply decision
+    const input = bodyText.toLowerCase().trim();
     let reply = '';
     let targetStatus: WhatsAppConversationStatus = WhatsAppConversationStatus.OPEN;
 
@@ -345,7 +331,7 @@ export class WhatsappService {
     } else if (input === '1') {
       reply = `💼 *Agency Services Overview* \n\nWe provide professional:\n• Performance Marketing & Ad Syncing\n• Custom CRM Solutions & Automations\n• AI Autopilot integrations\n\nVisit your dashboard profile to view pricing.`;
     } else if (input === '2') {
-      reply = `🔧 *Support Case Initialized* \n\nWe have automatically opened a support case in our database linked to phone number ${dto.phoneNumber}. A customer success coordinator will call you back shortly.`;
+      reply = `🔧 *Support Case Initialized* \n\nWe have automatically opened a support case in our database linked to phone number ${phoneNumber}. A customer success coordinator will call you back shortly.`;
     } else if (input === '3') {
       reply = `👤 *Live Agent Transfer* \n\nTransferring conversation session to live agent queue... Our team has been notified. You can message directly now!`;
       targetStatus = WhatsAppConversationStatus.OPEN;
@@ -353,7 +339,7 @@ export class WhatsappService {
       reply = `👋 *Hi there!* \n\nWelcome to our business channel. Please reply with *help* or *menu* to see available automated services.`;
     }
 
-    // 5. Submit bot outbound message
+    // 4. Submit bot outbound message
     const botMessage = await this.prisma.whatsAppMessage.create({
       data: {
         conversationId: conversation.id,
@@ -364,7 +350,7 @@ export class WhatsappService {
       },
     });
 
-    // 6. Update conversation state
+    // 5. Update conversation state
     await this.prisma.whatsAppConversation.update({
       where: { id: conversation.id },
       data: {
@@ -375,5 +361,99 @@ export class WhatsappService {
     });
 
     return botMessage;
+  }
+
+  // 10. Verification challenge for Meta Webhooks
+  verifyWebhookChallenge(query: any): string {
+    const mode = query['hub.mode'];
+    const token = query['hub.verify_token'];
+    const challenge = query['hub.challenge'];
+
+    const localVerifyToken = this.configService.get<string>('WHATSAPP_VERIFY_TOKEN') || 'mock_whatsapp_verify_token';
+
+    if (mode === 'subscribe' && token === localVerifyToken) {
+      return challenge;
+    }
+    throw new ForbiddenException('Verification token mismatch or invalid mode');
+  }
+
+  // 11. Secure Production Webhook
+  async receiveWebhook(req: any): Promise<any> {
+    const rawBody = req.rawBody;
+    if (!rawBody) {
+      throw new BadRequestException('Raw body not available. Make sure rawBody: true is enabled.');
+    }
+
+    // A. Verify Meta signature
+    const signature = req.headers['x-hub-signature-256'] as string;
+    if (!signature || !signature.startsWith('sha256=')) {
+      throw new UnauthorizedException('Missing or invalid X-Hub-Signature-256 header');
+    }
+
+    const appSecret = this.configService.get<string>('WHATSAPP_APP_SECRET') || 'mock_whatsapp_app_secret';
+    const signatureHash = signature.substring(7); // Remove 'sha256='
+    const calculatedHash = crypto
+      .createHmac('sha256', appSecret)
+      .update(rawBody)
+      .digest('hex');
+
+    const sigBuffer = Buffer.from(signatureHash, 'utf-8');
+    const calcBuffer = Buffer.from(calculatedHash, 'utf-8');
+
+    if (sigBuffer.length !== calcBuffer.length || !crypto.timingSafeEqual(sigBuffer, calcBuffer)) {
+      throw new UnauthorizedException('Invalid signature');
+    }
+
+    // B. Parse Meta payload
+    let body: any;
+    try {
+      body = JSON.parse(rawBody.toString('utf-8'));
+    } catch (err) {
+      throw new BadRequestException('Invalid JSON payload');
+    }
+
+    const entry = body.entry?.[0];
+    const change = entry?.changes?.[0];
+    const value = change?.value;
+    const message = value?.messages?.[0];
+    const metadata = value?.metadata;
+
+    if (!message || !metadata) {
+      return { status: 'ignored' };
+    }
+
+    const messageId = message.id;
+    const phoneNumber = message.from;
+    const bodyText = message.text?.body;
+    const wabaPhoneId = metadata.phone_number_id;
+
+    if (!phoneNumber || !bodyText || !wabaPhoneId) {
+      return { status: 'malformed_message' };
+    }
+
+    // C. Redis-based Idempotency check
+    const redisKey = `whatsapp:webhook:processed:${messageId}`;
+    const isProcessed = await this.redisService.get(redisKey);
+    if (isProcessed) {
+      return { status: 'duplicate' };
+    }
+    await this.redisService.set(redisKey, 'true', 86400); // 24 hours TTL
+
+    // D. Map wabaPhoneNumberId -> Tenant
+    const tenant = await this.prisma.tenant.findUnique({
+      where: { wabaPhoneNumberId: wabaPhoneId },
+    });
+
+    if (!tenant) {
+      throw new NotFoundException(`No tenant found matching WABA phone number ID: ${wabaPhoneId}`);
+    }
+
+    // E. Execute inbound bot processing
+    return this.processInboundMessage(phoneNumber, bodyText, tenant.id);
+  }
+
+  // 12. Secure simulation route for authorized tenant users
+  async simulateWebhook(dto: ReceiveWebhookDto, tenantId: string): Promise<WhatsAppMessage> {
+    return this.processInboundMessage(dto.phoneNumber, dto.body, tenantId);
   }
 }

@@ -111,11 +111,32 @@ export class WhatsappController {
     return this.whatsappService.createBroadcast(dto, tenantId);
   }
 
-  // 9. Simulated Inbound Webhook (Public Endpoint)
+  // 9. Public Webhook - Meta GET Verification Handshake
+  @Get('webhook')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Public verification challenge endpoint for Meta WhatsApp webhook' })
+  verifyWebhook(@Query() query: any): string {
+    return this.whatsappService.verifyWebhookChallenge(query);
+  }
+
+  // 10. Public Webhook - Secure POST Webhook receiver
   @Post('webhook')
   @HttpCode(HttpStatus.OK)
-  @ApiOperation({ summary: 'Public webhook endpoint simulating incoming customer messages' })
-  receiveWebhook(@Body() dto: ReceiveWebhookDto): Promise<WhatsAppMessage> {
-    return this.whatsappService.receiveWebhook(dto);
+  @ApiOperation({ summary: 'Public webhook endpoint receiving incoming customer messages' })
+  receiveWebhook(@Request() req: any): Promise<any> {
+    return this.whatsappService.receiveWebhook(req);
+  }
+
+  // 11. Secure Webhook Simulator (Authenticated/Scoped to Tenant)
+  @ApiBearerAuth()
+  @UseGuards(JwtAuthGuard)
+  @Post('simulate-webhook')
+  @HttpCode(HttpStatus.OK)
+  @ApiOperation({ summary: 'Secure simulation endpoint for authenticated sandbox client messaging' })
+  simulateWebhook(
+    @Body() dto: ReceiveWebhookDto,
+    @TenantId() tenantId: string
+  ): Promise<WhatsAppMessage> {
+    return this.whatsappService.simulateWebhook(dto, tenantId);
   }
 }

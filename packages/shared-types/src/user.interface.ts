@@ -23,6 +23,13 @@ export interface ITenant {
   id: string;
   name: string;
   domain?: string;
+  parentId?: string | null;
+  logoUrl?: string | null;
+  primaryColor?: string | null;
+  secondaryColor?: string | null;
+  companyName?: string | null;
+  supportEmail?: string | null;
   createdAt: Date;
   updatedAt: Date;
 }
+

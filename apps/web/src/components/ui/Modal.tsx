@@ -33,16 +33,14 @@ export const Modal = ({ isOpen, onClose, title, children, footer, size = 'md' }:
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center p-4">
-      {/* Backdrop */}
       <div
-        className="absolute inset-0 bg-slate-950/60 dark:bg-slate-950/80 backdrop-blur-sm transition-opacity"
+        className="absolute inset-0 bg-slate-950/55 backdrop-blur-sm transition-opacity"
         onClick={onClose}
       />
 
-      {/* Modal Container */}
       <div
         className={cn(
-          'relative w-full max-h-[90vh] flex flex-col rounded-2xl glass-panel text-slate-900 dark:text-slate-100 shadow-2xl transition-all scale-100 opacity-100 z-10 overflow-hidden',
+          'enterprise-card relative z-10 flex max-h-[90vh] w-full flex-col overflow-hidden rounded-xl text-[color:var(--app-text)] shadow-enterprise-lg transition-all scale-100 opacity-100',
           {
             'max-w-sm': size === 'sm',
             'max-w-md': size === 'md',
@@ -51,27 +49,24 @@ export const Modal = ({ isOpen, onClose, title, children, footer, size = 'md' }:
           }
         )}
       >
-        {/* Header */}
-        <div className="flex items-center justify-between px-6 py-4.5 border-b border-slate-200 dark:border-dark-border">
-          <h3 className="font-display font-bold text-lg tracking-tight text-slate-900 dark:text-slate-50">
+        <div className="flex items-center justify-between border-b border-[color:var(--app-border)] px-6 py-4">
+          <h3 className="font-display text-lg font-bold tracking-tight text-[color:var(--app-text)]">
             {title}
           </h3>
           <button
             onClick={onClose}
-            className="p-1.5 rounded-lg text-slate-400 hover:text-slate-600 dark:hover:text-slate-200 hover:bg-slate-100 dark:hover:bg-slate-800 transition-colors cursor-pointer"
+            className="focus-enterprise rounded-lg p-1.5 text-[color:var(--app-text-muted)] hover:bg-[color:var(--app-surface-secondary)] hover:text-[color:var(--app-text)] transition-colors cursor-pointer"
           >
             <X className="w-5 h-5" />
           </button>
         </div>
 
-        {/* Content */}
-        <div className="px-6 py-5 overflow-y-auto flex-1 text-sm leading-relaxed text-slate-600 dark:text-slate-300">
+        <div className="flex-1 overflow-y-auto px-6 py-5 text-sm leading-relaxed text-[color:var(--app-text-muted)]">
           {children}
         </div>
 
-        {/* Footer */}
         {footer && (
-          <div className="px-6 py-4 border-t border-slate-200 dark:border-dark-border bg-slate-50/50 dark:bg-dark-card/30 flex items-center justify-end gap-3">
+          <div className="flex items-center justify-end gap-3 border-t border-[color:var(--app-border)] bg-[color:var(--app-surface-secondary)] px-6 py-4">
             {footer}
           </div>
         )}
@@ -125,7 +120,7 @@ export const ConfirmationModal = ({
         </>
       }
     >
-      <p className="text-slate-600 dark:text-slate-300">{message}</p>
+      <p className="text-[color:var(--app-text-muted)]">{message}</p>
     </Modal>
   );
 };

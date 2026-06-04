@@ -50,7 +50,7 @@ export class AnalyticsController {
     @TenantId() tenantId: string,
     @Query('limit') limit?: number,
   ) {
-    const resolvedLimit = limit ? Number(limit) : 100;
+    const resolvedLimit = limit && !isNaN(Number(limit)) ? Number(limit) : 100;
     return this.analyticsService.getAuditLogs(tenantId, resolvedLimit);
   }
 
