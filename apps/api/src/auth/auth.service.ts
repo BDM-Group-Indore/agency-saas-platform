@@ -148,4 +148,17 @@ export class AuthService {
       },
     };
   }
+
+  async getTenantUsers(tenantId: string) {
+    return this.prisma.user.findMany({
+      where: { tenantId, isActive: true },
+      select: {
+        id: true,
+        email: true,
+        firstName: true,
+        lastName: true,
+        role: true,
+      },
+    });
+  }
 }

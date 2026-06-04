@@ -6,6 +6,11 @@ import { DatabaseModule } from './database/database.module';
 import { RedisModule } from './redis/redis.module';
 import { AuthModule } from './auth/auth.module';
 import { CrmModule } from './crm/crm.module';
+import { LeadsModule } from './leads/leads.module';
+import { WhatsappModule } from './whatsapp/whatsapp.module';
+import { BillingModule } from './billing/billing.module';
+import { AnalyticsModule } from './analytics/analytics.module';
+import { AiModule } from './ai/ai.module';
 
 @Module({
   imports: [
@@ -24,6 +29,12 @@ import { CrmModule } from './crm/crm.module';
     RedisModule,
     AuthModule,
     CrmModule,
+    LeadsModule,
+    WhatsappModule,
+    BillingModule,
+    AnalyticsModule,
+    AiModule,
   ],
 })
 export class AppModule {}
+

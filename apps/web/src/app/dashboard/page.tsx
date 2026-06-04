@@ -1,12 +1,14 @@
 'use client';
 
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
+import { useRouter } from 'next/navigation';
 import { cn } from '@/lib/utils';
 import { useRoleStore } from '@/store/roleStore';
 import { StatsCard, Card } from '@/components/ui/Card';
 import { Button } from '@/components/ui/Button';
 import { Input } from '@/components/ui/Input';
 import { Modal, ConfirmationModal } from '@/components/ui/Modal';
+import { apiRequest } from '@/lib/api';
 import {
   mockLeads,
   mockCampaigns,
@@ -30,11 +32,35 @@ import {
   Edit3,
   ExternalLink,
   ShieldAlert,
+  RefreshCw,
+  Loader2,
+  Sparkles
 } from 'lucide-react';
 
 export default function DashboardOverviewPage() {
+  const router = useRouter();
   const { currentRole } = useRoleStore();
   const [leads, setLeads] = useState<Lead[]>(mockLeads);
+
+  // AI Insights States
+  const [aiInsights, setAiInsights] = useState<any>(null);
+  const [isLoadingInsights, setIsLoadingInsights] = useState(false);
+
+  const fetchAiInsights = async () => {
+    setIsLoadingInsights(true);
+    try {
+      const data = await apiRequest('/ai/insights');
+      setAiInsights(data);
+    } catch (err) {
+      console.error('Failed to fetch AI telemetry insights:', err);
+    } finally {
+      setIsLoadingInsights(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchAiInsights();
+  }, []);
   const [campaigns, setCampaigns] = useState<Campaign[]>(mockCampaigns);
   const [deals, setDeals] = useState<Deal[]>(mockDeals);
 
@@ -363,20 +389,77 @@ export default function DashboardOverviewPage() {
             </div>
           </Card>
 
-          {/* Quick AI follow up metrics panel */}
-          <Card className="bg-gradient-to-br from-indigo-950/20 via-slate-900/30 to-accent/5 relative overflow-hidden flex flex-col gap-3">
-            <div className="absolute top-0 right-0 w-16 h-16 bg-accent/10 rounded-full blur-xl pointer-events-none" />
-            <span className="inline-flex items-center gap-1 text-[10px] font-bold text-accent uppercase tracking-wider">
-              <Cpu className="w-3.5 h-3.5" /> AI Engine Overview
-            </span>
-            <h4 className="font-display font-bold text-sm text-slate-100">
-              Conversational Auto-Pilot
-            </h4>
-            <p className="text-[11px] text-slate-400 leading-normal">
-              Your autonomous AI assistant has analyzed 18 incoming leads today, scoring 5 as high-intent targets and booking 2 direct sales calls via Google Calendar.
-            </p>
-            <button className="text-xs text-primary font-bold hover:text-primary-hover transition-colors flex items-center gap-1 cursor-pointer self-start group mt-1">
-              Configure Prompts <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
+          {/* Real AI follow up telemetry insights panel */}
+          <Card className="bg-gradient-to-br from-indigo-950/20 via-slate-900/30 to-accent/5 relative overflow-hidden flex flex-col gap-4 border border-primary/10">
+            <div className="absolute top-0 right-0 w-20 h-20 bg-accent/10 rounded-full blur-2xl pointer-events-none" />
+            
+            <div className="flex items-center justify-between shrink-0">
+              <span className="inline-flex items-center gap-1.5 text-[10px] font-bold text-accent uppercase tracking-wider">
+                <Cpu className="w-3.5 h-3.5 animate-pulse" /> AdPulse AI Telemetry
+              </span>
+              <button
+                onClick={fetchAiInsights}
+                disabled={isLoadingInsights}
+                className="p-1 rounded-lg hover:bg-slate-800/80 text-slate-400 hover:text-white transition-colors cursor-pointer"
+                title="Refresh Insights"
+              >
+                <RefreshCw className={`w-3.5 h-3.5 ${isLoadingInsights ? 'animate-spin' : ''}`} />
+              </button>
+            </div>
+
+            <div className="flex flex-col gap-1.5">
+              <h4 className="font-display font-bold text-sm text-slate-100 flex items-center gap-1">
+                <Sparkles className="w-4 h-4 text-primary" /> Active Business Insights
+              </h4>
+              
+              {isLoadingInsights ? (
+                <div className="py-6 flex flex-col items-center justify-center gap-2">
+                  <Loader2 className="w-5 h-5 text-primary animate-spin" />
+                  <span className="text-[10px] text-slate-400 font-medium">Aggregating telemetry...</span>
+                </div>
+              ) : aiInsights ? (
+                <div className="flex flex-col gap-3">
+                  <p className="text-[11px] text-slate-350 leading-relaxed bg-slate-900/50 p-2.5 rounded-lg border border-slate-800/40">
+                    {aiInsights.summary}
+                  </p>
+                  
+                  {/* Detailed recommendations list */}
+                  <div className="flex flex-col gap-2">
+                    {aiInsights.insights?.map((insight: any, idx: number) => {
+                      const isPositive = insight.status === 'positive';
+                      const isWarning = insight.status === 'warning';
+                      return (
+                        <div key={idx} className="flex flex-col gap-1 bg-slate-900/30 border border-slate-850 p-2.5 rounded-lg text-[10.5px]">
+                          <div className="flex items-center justify-between gap-1.5">
+                            <span className="font-bold text-slate-150">{insight.metric}</span>
+                            <span className={`px-1.5 py-0.5 rounded-full text-[8.5px] font-extrabold uppercase ${
+                              isPositive 
+                                ? 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20' 
+                                : isWarning 
+                                  ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' 
+                                  : 'bg-slate-500/10 text-slate-400 border border-slate-500/20'
+                            }`}>
+                              {insight.value}
+                            </span>
+                          </div>
+                          <p className="text-slate-400 leading-normal mt-1">{insight.recommendation}</p>
+                        </div>
+                      );
+                    })}
+                  </div>
+                </div>
+              ) : (
+                <p className="text-[11px] text-slate-450 leading-normal">
+                  No telemetry metrics aggregated. Run campaign actions or add database items.
+                </p>
+              )}
+            </div>
+
+            <button
+              onClick={() => router.push('/dashboard/settings')}
+              className="text-xs text-primary font-bold hover:text-primary-hover transition-colors flex items-center gap-1 cursor-pointer self-start group mt-auto"
+            >
+              Configure Prompt Library <ArrowRight className="w-3 h-3 group-hover:translate-x-1 transition-transform" />
             </button>
           </Card>
         </div>

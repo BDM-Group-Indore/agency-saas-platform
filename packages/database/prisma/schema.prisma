@@ -8,33 +8,43 @@ generator client {
 }
 
 model Tenant {
-  id         String     @id @default(cuid())
-  name       String
-  domain     String?    @unique
-  users      User[]
-  companies  Company[]
-  contacts   Contact[]
-  pipelines  Pipeline[]
-  deals      Deal[]
-  activities Activity[]
-  notes      Note[]
-  createdAt  DateTime   @default(now())
-  updatedAt  DateTime   @updatedAt
+  id                    String                 @id @default(cuid())
+  name                  String
+  domain                String?                @unique
+  users                 User[]
+  companies             Company[]
+  contacts              Contact[]
+  pipelines             Pipeline[]
+  deals                 Deal[]
+  activities            Activity[]
+  notes                 Note[]
+  leads                 Lead[]
+  whatsappConversations WhatsAppConversation[]
+  whatsappTemplates     WhatsAppTemplate[]
+  whatsappBroadcasts    WhatsAppBroadcast[]
+  invoices              Invoice[]
+  subscription          TenantSubscription?
+  promptTemplates       PromptTemplate[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 }
 
+
 model User {
-  id           String   @id @default(cuid())
-  email        String   @unique
-  password     String
-  firstName    String?
-  lastName     String?
-  role         String   @default("CLIENT") // SUPER_ADMIN, AGENCY_OWNER, MANAGER, SALES, SUPPORT, CLIENT
-  isActive     Boolean  @default(true)
-  tokenVersion Int      @default(0)
-  tenantId     String?
-  tenant       Tenant?  @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  createdAt    DateTime @default(now())
-  updatedAt    DateTime @updatedAt
+  id                    String            @id @default(cuid())
+  email                 String            @unique
+  password              String
+  firstName             String?
+  lastName              String?
+  role                  String            @default("CLIENT") // SUPER_ADMIN, AGENCY_OWNER, MANAGER, SALES, SUPPORT, CLIENT
+  isActive              Boolean           @default(true)
+  tokenVersion          Int               @default(0)
+  tenantId              String?
+  tenant                Tenant?           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  leads                 Lead[]
+  sentWhatsAppMessages  WhatsAppMessage[]
+  createdAt             DateTime          @default(now())
+  updatedAt             DateTime          @updatedAt
 
   @@index([email])
   @@index([tenantId])
@@ -57,20 +67,21 @@ model Company {
 }
 
 model Contact {
-  id        String   @id @default(cuid())
-  firstName String
-  lastName  String?
-  email     String?
-  phone     String?
-  companyId String?
-  company   Company? @relation(fields: [companyId], references: [id], onDelete: SetNull)
-  tenantId  String
-  tenant    Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
-  deals     Deal[]
-  activities Activity[]
-  notes     Note[]
-  createdAt DateTime @default(now())
-  updatedAt DateTime @updatedAt
+  id                    String                 @id @default(cuid())
+  firstName             String
+  lastName              String?
+  email                 String?
+  phone                 String?
+  companyId             String?
+  company               Company?               @relation(fields: [companyId], references: [id], onDelete: SetNull)
+  tenantId              String
+  tenant                Tenant                 @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  deals                 Deal[]
+  activities            Activity[]
+  notes                 Note[]
+  whatsappConversations WhatsAppConversation[]
+  createdAt             DateTime               @default(now())
+  updatedAt             DateTime               @updatedAt
 
   @@index([companyId])
   @@index([tenantId])
@@ -162,3 +173,173 @@ model Note {
   @@index([dealId])
   @@index([tenantId])
 }
+
+model Lead {
+  id             String    @id @default(cuid())
+  firstName      String
+  lastName       String?
+  email          String?
+  phone          String?
+  companyName    String?
+  status         String    @default("NEW") // NEW, CONTACTED, QUALIFIED, UNQUALIFIED, CONVERTED
+  source         String?   @default("MANUAL") // WEB_FORM, MANUAL, COLD_OUTREACH, REFERRAL
+  score          Int       @default(0)
+  assignedUserId String?
+  assignedUser   User?     @relation(fields: [assignedUserId], references: [id], onDelete: SetNull)
+  tenantId       String
+  tenant         Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  isDuplicate    Boolean   @default(false)
+  createdAt      DateTime  @default(now())
+  updatedAt      DateTime  @updatedAt
+
+  @@index([assignedUserId])
+  @@index([tenantId])
+  @@index([email])
+}
+
+model WhatsAppConversation {
+  id            String            @id @default(cuid())
+  contactId     String?
+  contact       Contact?          @relation(fields: [contactId], references: [id], onDelete: SetNull)
+  phoneNumber   String
+  lastMessage   String?
+  lastMessageAt DateTime          @default(now())
+  status        String            @default("OPEN") // OPEN, CLOSED, SNOOZED
+  tenantId      String
+  tenant        Tenant            @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messages      WhatsAppMessage[]
+  createdAt     DateTime          @default(now())
+  updatedAt     DateTime          @updatedAt
+
+  @@unique([tenantId, phoneNumber])
+  @@index([contactId])
+  @@index([tenantId])
+  @@index([phoneNumber])
+}
+
+model WhatsAppMessage {
+  id             String               @id @default(cuid())
+  conversationId String
+  conversation   WhatsAppConversation @relation(fields: [conversationId], references: [id], onDelete: Cascade)
+  direction      String               @default("OUTBOUND") // INBOUND, OUTBOUND
+  senderId       String?
+  sender         User?                @relation(fields: [senderId], references: [id], onDelete: SetNull)
+  body           String
+  type           String               @default("TEXT") // TEXT, IMAGE, DOCUMENT, TEMPLATE
+  status         String               @default("SENT") // SENT, DELIVERED, READ, FAILED
+  templateName   String?
+  mediaUrl       String?
+  createdAt      DateTime             @default(now())
+
+  @@index([conversationId])
+  @@index([senderId])
+}
+
+model WhatsAppTemplate {
+  id         String              @id @default(cuid())
+  name       String
+  category   String              @default("UTILITY") // MARKETING, UTILITY, AUTHENTICATION
+  language   String              @default("en_US")
+  components Json
+  status     String              @default("APPROVED") // APPROVED, PENDING, REJECTED
+  tenantId   String
+  tenant     Tenant              @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  broadcasts WhatsAppBroadcast[]
+  createdAt  DateTime            @default(now())
+  updatedAt  DateTime            @updatedAt
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+model WhatsAppBroadcast {
+  id             String           @id @default(cuid())
+  name           String
+  templateId     String
+  template       WhatsAppTemplate @relation(fields: [templateId], references: [id], onDelete: Restrict)
+  status         String           @default("DRAFT") // DRAFT, SENDING, COMPLETED, FAILED
+  sentCount      Int              @default(0)
+  deliveredCount Int              @default(0)
+  readCount      Int              @default(0)
+  failedCount    Int              @default(0)
+  tenantId       String
+  tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt      DateTime         @default(now())
+  updatedAt      DateTime         @updatedAt
+
+  @@index([templateId])
+  @@index([tenantId])
+}
+
+// ─── Phase 5: Billing & Subscription ─────────────────────────────────────────
+
+model SubscriptionPlan {
+  id            String               @id @default(cuid())
+  name          String               @unique // Starter, Agency Pro, Enterprise Scale
+  price         Float
+  currency      String               @default("USD")
+  billingCycle  String               @default("MONTHLY") // MONTHLY, ANNUAL
+  maxUsers      Int                  @default(5)
+  features      Json                 // array of feature strings
+  isActive      Boolean              @default(true)
+  subscriptions TenantSubscription[]
+  createdAt     DateTime             @default(now())
+  updatedAt     DateTime             @updatedAt
+}
+
+model TenantSubscription {
+  id                 String           @id @default(cuid())
+  tenantId           String           @unique
+  tenant             Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  planId             String
+  plan               SubscriptionPlan @relation(fields: [planId], references: [id], onDelete: Restrict)
+  status             String           @default("ACTIVE") // ACTIVE, CANCELLED, PAST_DUE, TRIALING
+  currentPeriodStart DateTime         @default(now())
+  currentPeriodEnd   DateTime
+  cancelledAt        DateTime?
+  trialEndsAt        DateTime?
+  createdAt          DateTime         @default(now())
+  updatedAt          DateTime         @updatedAt
+
+  @@index([planId])
+}
+
+model Invoice {
+  id            String   @id @default(cuid())
+  invoiceNumber String   @unique // INV-0001
+  tenantId      String
+  tenant        Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  clientName    String
+  clientEmail   String?
+  amount        Float
+  currency      String   @default("USD")
+  status        String   @default("DRAFT") // DRAFT, SENT, PAID, VOID, OVERDUE
+  dueDate       DateTime
+  paidAt        DateTime?
+  lineItems     Json     // [{ description, quantity, unitPrice, total }]
+  notes         String?
+  createdAt     DateTime @default(now())
+  updatedAt     DateTime @updatedAt
+
+  @@index([tenantId])
+  @@index([status])
+  @@index([dueDate])
+}
+
+// ─── Phase 6: AI Prompt Library ──────────────────────────────────────────────
+
+model PromptTemplate {
+  id           String   @id @default(cuid())
+  name         String
+  category     String   // LEAD_SCORING, CHATBOT, EMAIL_DRAFT, etc.
+  systemPrompt String
+  userPrompt   String?
+  tenantId     String
+  tenant       Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  createdAt    DateTime @default(now())
+  updatedAt    DateTime @updatedAt
+
+  @@unique([tenantId, name])
+  @@index([tenantId])
+}
+

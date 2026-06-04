@@ -1,1 +1,22 @@
-export { PrismaClient, User, Tenant, Company, Contact, Pipeline, Stage, Deal, Activity, Note } from '@prisma/client';
+export {
+  PrismaClient,
+  User,
+  Tenant,
+  Company,
+  Contact,
+  Pipeline,
+  Stage,
+  Deal,
+  Activity,
+  Note,
+  Lead,
+  WhatsAppConversation,
+  WhatsAppMessage,
+  WhatsAppTemplate,
+  WhatsAppBroadcast,
+  SubscriptionPlan,
+  TenantSubscription,
+  Invoice,
+  PromptTemplate,
+} from '@prisma/client';
+

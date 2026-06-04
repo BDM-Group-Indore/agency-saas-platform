@@ -66,4 +66,12 @@ export class AuthController {
   async adminRoute() {
     return { message: 'Welcome Admin! This is a secure route.' };
   }
+
+  @UseGuards(JwtAuthGuard)
+  @Get('users')
+  @ApiBearerAuth()
+  @ApiOperation({ summary: 'Get all active users in the tenant' })
+  async getTenantUsers(@Request() req: any) {
+    return this.authService.getTenantUsers(req.user.tenantId);
+  }
 }

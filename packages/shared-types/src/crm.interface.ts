@@ -88,3 +88,28 @@ export interface INote {
   createdAt: Date;
   updatedAt: Date;
 }
+
+export enum LeadStatus {
+  NEW = 'NEW',
+  CONTACTED = 'CONTACTED',
+  QUALIFIED = 'QUALIFIED',
+  UNQUALIFIED = 'UNQUALIFIED',
+  CONVERTED = 'CONVERTED'
+}
+
+export interface ILead {
+  id: string;
+  firstName: string;
+  lastName?: string;
+  email?: string;
+  phone?: string;
+  companyName?: string;
+  status: LeadStatus;
+  source?: string;
+  score: number;
+  assignedUserId?: string;
+  tenantId: string;
+  isDuplicate: boolean;
+  createdAt: Date;
+  updatedAt: Date;
+}

@@ -1,4 +1,4 @@
-FROM node:20-alpine AS deps
+FROM node:22-alpine AS deps
 WORKDIR /app
 
 ENV PNPM_HOME="/pnpm"
@@ -21,7 +21,7 @@ RUN pnpm --filter @saas/ui run build
 RUN pnpm --filter @saas/shared-types run build
 RUN pnpm --filter @saas/web run build
 
-FROM node:20-alpine AS runner
+FROM node:22-alpine AS runner
 WORKDIR /app
 
 ENV NODE_ENV=production
