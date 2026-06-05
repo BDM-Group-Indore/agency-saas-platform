@@ -64,40 +64,82 @@ export class EnterpriseService {
       orderBy: { createdAt: 'desc' },
     });
 
-    const result: any[] = [];
-    for (const tenant of tenants) {
-      const usersCount = await this.prisma.user.count({
-        where: { tenantId: tenant.id },
-      });
+    if (tenants.length === 0) {
+      return [];
+    }
 
-      const invoicesCount = await this.prisma.invoice.count({
-        where: { tenantId: tenant.id },
-      });
+    const tenantIds = tenants.map((t) => t.id);
 
-      const revenueSum = await this.prisma.invoice.aggregate({
-        where: { tenantId: tenant.id, status: 'PAID' },
-        _sum: { amount: true },
-      });
+    // 1. Grouped user counts
+    const userCountsGrouped = await this.prisma.user.groupBy({
+      by: ['tenantId'],
+      where: { tenantId: { in: tenantIds } },
+      _count: { id: true },
+    });
+    const userCountsMap = new Map<string, number>();
+    for (const item of userCountsGrouped) {
+      if (item.tenantId) {
+        userCountsMap.set(item.tenantId, item._count.id);
+      }
+    }
 
-      const subscription = await this.prisma.tenantSubscription.findUnique({
-        where: { tenantId: tenant.id },
-        include: { plan: true },
-      });
+    // 2. Grouped invoice counts
+    const invoiceCountsGrouped = await this.prisma.invoice.groupBy({
+      by: ['tenantId'],
+      where: { tenantId: { in: tenantIds } },
+      _count: { id: true },
+    });
+    const invoiceCountsMap = new Map<string, number>();
+    for (const item of invoiceCountsGrouped) {
+      if (item.tenantId) {
+        invoiceCountsMap.set(item.tenantId, item._count.id);
+      }
+    }
 
-      result.push({
+    // 3. Grouped revenue sums
+    const revenueSumsGrouped = await this.prisma.invoice.groupBy({
+      by: ['tenantId'],
+      where: {
+        tenantId: { in: tenantIds },
+        status: 'PAID',
+      },
+      _sum: { amount: true },
+    });
+    const revenueSumsMap = new Map<string, number>();
+    for (const item of revenueSumsGrouped) {
+      if (item.tenantId) {
+        revenueSumsMap.set(item.tenantId, item._sum.amount || 0);
+      }
+    }
+
+    // 4. Batch fetch subscriptions and plans
+    const subscriptions = await this.prisma.tenantSubscription.findMany({
+      where: { tenantId: { in: tenantIds } },
+      include: { plan: true },
+    });
+    const subscriptionsMap = new Map<string, any>();
+    for (const sub of subscriptions) {
+      subscriptionsMap.set(sub.tenantId, sub);
+    }
+
+    return tenants.map((tenant) => {
+      const usersCount = userCountsMap.get(tenant.id) || 0;
+      const invoicesCount = invoiceCountsMap.get(tenant.id) || 0;
+      const totalRevenue = revenueSumsMap.get(tenant.id) || 0;
+      const subscription = subscriptionsMap.get(tenant.id);
+
+      return {
         id: tenant.id,
         name: tenant.name,
         domain: tenant.domain,
         usersCount,
         invoicesCount,
-        totalRevenue: revenueSum._sum.amount || 0,
+        totalRevenue,
         subscriptionStatus: subscription ? subscription.status : 'NO_SUBSCRIPTION',
         subscriptionPlan: subscription ? subscription.plan.name : 'None',
         createdAt: tenant.createdAt,
-      });
-    }
-
-    return result;
+      };
+    });
   }
 
   async provisionChildTenant(parentId: string, data: {
@@ -218,28 +260,48 @@ export class EnterpriseService {
       where: { tenantId: { in: childrenIds } },
     });
 
-    const revenueByLocation: any[] = [];
-    let totalAggregatedRevenue = 0;
+    // 1. Grouped revenue sums
+    const revenueGrouped = await this.prisma.invoice.groupBy({
+      by: ['tenantId'],
+      where: {
+        tenantId: { in: childrenIds },
+        status: 'PAID',
+      },
+      _sum: { amount: true },
+    });
+    const revenueMap = new Map<string, number>();
+    for (const item of revenueGrouped) {
+      if (item.tenantId) {
+        revenueMap.set(item.tenantId, item._sum.amount || 0);
+      }
+    }
 
-    for (const child of children) {
-      const rev = await this.prisma.invoice.aggregate({
-        where: { tenantId: child.id, status: 'PAID' },
-        _sum: { amount: true },
-      });
-      const revenue = rev._sum.amount || 0;
+    // 2. Grouped leads counts
+    const leadCountsGrouped = await this.prisma.lead.groupBy({
+      by: ['tenantId'],
+      where: { tenantId: { in: childrenIds } },
+      _count: { id: true },
+    });
+    const leadCountsMap = new Map<string, number>();
+    for (const item of leadCountsGrouped) {
+      if (item.tenantId) {
+        leadCountsMap.set(item.tenantId, item._count.id);
+      }
+    }
+
+    let totalAggregatedRevenue = 0;
+    const revenueByLocation = children.map((child) => {
+      const revenue = revenueMap.get(child.id) || 0;
+      const leadsCount = leadCountsMap.get(child.id) || 0;
       totalAggregatedRevenue += revenue;
 
-      const leadsCount = await this.prisma.lead.count({
-        where: { tenantId: child.id },
-      });
-
-      revenueByLocation.push({
+      return {
         id: child.id,
         name: child.name,
         revenue,
         leadsCount,
-      });
-    }
+      };
+    });
 
     return {
       totalSubTenants: childrenIds.length,

@@ -81,6 +81,9 @@ describe('AuthService', () => {
       user: {
         findUnique: jest.fn().mockResolvedValue(null),
       },
+      userSession: {
+        create: jest.fn().mockResolvedValue({}),
+      },
       $transaction: jest.fn((callback) => callback(tx)),
     });
 
@@ -125,6 +128,9 @@ describe('AuthService', () => {
     const service = createService({
       user: {
         findUnique: jest.fn().mockResolvedValue(null),
+      },
+      userSession: {
+        create: jest.fn().mockResolvedValue({}),
       },
       $transaction: jest.fn((callback) => callback(tx)),
     });

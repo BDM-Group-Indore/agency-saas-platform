@@ -290,26 +290,46 @@ export class BillingService {
     pendingAmount: number;
     overdueCount: number;
   }> {
-    const invoices = await this.prisma.invoice.findMany({ where: { tenantId } });
+    // Single grouped aggregate query — all work done in PostgreSQL, no rows
+    // transferred to Node.js beyond the tiny result set.
+    const [statusGroups, overdueCount] = await Promise.all([
+      // Group invoices by status and sum amounts + count rows
+      this.prisma.invoice.groupBy({
+        by: ['status'],
+        where: { tenantId },
+        _sum: { amount: true },
+        _count: { _all: true },
+      }),
 
-    const totalRevenue = invoices
-      .filter((i) => i.status === 'PAID')
-      .reduce((s, i) => s + i.amount, 0);
+      // Overdue = unpaid invoices whose dueDate has already passed
+      this.prisma.invoice.count({
+        where: {
+          tenantId,
+          status: { in: ['DRAFT', 'SENT'] },
+          dueDate: { lt: new Date() },
+        },
+      }),
+    ]);
 
-    const paidInvoices = invoices.filter((i) => i.status === 'PAID').length;
+    let totalRevenue = 0;
+    let paidInvoices = 0;
+    let pendingAmount = 0;
 
-    const pendingAmount = invoices
-      .filter((i) => ['DRAFT', 'SENT'].includes(i.status))
-      .reduce((s, i) => s + i.amount, 0);
+    for (const group of statusGroups) {
+      const amount = group._sum.amount ?? 0;
+      const count = group._count._all;
 
-    const overdueCount = invoices.filter((i) => {
-      return (
-        ['DRAFT', 'SENT'].includes(i.status) && new Date(i.dueDate) < new Date()
-      );
-    }).length;
+      if (group.status === 'PAID') {
+        totalRevenue = amount;
+        paidInvoices = count;
+      } else if (group.status === 'DRAFT' || group.status === 'SENT') {
+        pendingAmount += amount;
+      }
+    }
 
     return { totalRevenue, paidInvoices, pendingAmount, overdueCount };
   }
+
 
   // ─── Payment Ledger Transactions ──────────────────────────────────────────
   async createPayment(invoiceId: string, dto: CreatePaymentDto, tenantId: string): Promise<PaymentTransaction> {

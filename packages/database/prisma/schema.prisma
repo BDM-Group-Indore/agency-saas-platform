@@ -35,6 +35,9 @@ model Tenant {
   subscription          TenantSubscription?
   promptTemplates       PromptTemplate[]
   paymentTransactions   PaymentTransaction[]
+  adAccounts            AdAccount[]
+  adCampaigns           AdCampaign[]
+  adSyncLogs            AdSyncLog[]
   createdAt             DateTime               @default(now())
   updatedAt             DateTime               @updatedAt
 }
@@ -50,15 +53,35 @@ model User {
   role                  String            @default("CLIENT") // SUPER_ADMIN, AGENCY_OWNER, MANAGER, SALES, SUPPORT, CLIENT
   isActive              Boolean           @default(true)
   tokenVersion          Int               @default(0)
+  // Auth hardening fields
+  failedLoginAttempts   Int               @default(0)
+  lockedUntil           DateTime?
+  mfaEnabled            Boolean           @default(false)
+  mfaSecret             String?           // AES-256-GCM encrypted TOTP secret
   tenantId              String?
   tenant                Tenant?           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
   leads                 Lead[]
   sentWhatsAppMessages  WhatsAppMessage[]
+  sessions              UserSession[]
   createdAt             DateTime          @default(now())
   updatedAt             DateTime          @updatedAt
 
   @@index([email])
   @@index([tenantId])
+}
+
+model UserSession {
+  id          String   @id @default(cuid())
+  userId      String
+  user        User     @relation(fields: [userId], references: [id], onDelete: Cascade)
+  tokenHash   String   @unique // bcrypt hash of the refresh token
+  userAgent   String?
+  ipAddress   String?
+  lastUsedAt  DateTime @default(now())
+  expiresAt   DateTime
+  createdAt   DateTime @default(now())
+
+  @@index([userId])
 }
 
 model Company {
@@ -240,10 +263,15 @@ model WhatsAppMessage {
   status         String               @default("SENT") // SENT, DELIVERED, READ, FAILED
   templateName   String?
   mediaUrl       String?
+  providerMessageId String?            @unique
+  broadcastId    String?
+  broadcast      WhatsAppBroadcast?   @relation(fields: [broadcastId], references: [id], onDelete: SetNull)
   createdAt      DateTime             @default(now())
 
   @@index([conversationId])
   @@index([senderId])
+  @@index([providerMessageId])
+  @@index([broadcastId])
 }
 
 model WhatsAppTemplate {
@@ -275,6 +303,7 @@ model WhatsAppBroadcast {
   failedCount    Int              @default(0)
   tenantId       String
   tenant         Tenant           @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  messages       WhatsAppMessage[]
   createdAt      DateTime         @default(now())
   updatedAt      DateTime         @updatedAt
 
@@ -379,6 +408,63 @@ model PromptTemplate {
   updatedAt    DateTime @updatedAt
 
   @@unique([tenantId, name])
+  @@index([tenantId])
+}
+
+// ─── Ads Integration ─────────────────────────────────────────────────────────
+
+model AdAccount {
+  id           String       @id @default(cuid())
+  tenantId     String
+  tenant       Tenant       @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  platform     String       // "GOOGLE_ADS", "META_ADS"
+  accountId    String       // Ad Account ID on Google/Meta
+  accountName  String?
+  accessToken  String       // OAuth access token
+  refreshToken String?      // OAuth refresh token (primarily Google)
+  expiresAt    DateTime?    // token expiration timestamp
+  status       String       @default("ACTIVE") // "ACTIVE", "EXPIRED", "ERROR"
+  campaigns    AdCampaign[]
+  createdAt    DateTime     @default(now())
+  updatedAt    DateTime     @updatedAt
+
+  @@unique([tenantId, platform, accountId])
+  @@index([tenantId])
+}
+
+model AdCampaign {
+  id              String    @id @default(cuid())
+  tenantId        String
+  tenant          Tenant    @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  adAccountId     String
+  adAccount       AdAccount @relation(fields: [adAccountId], references: [id], onDelete: Cascade)
+  campaignId      String    // Platform-specific campaign ID
+  name            String
+  spend           Float     @default(0.0)
+  budget          Float     @default(0.0)
+  leadsGenerated  Int       @default(0)
+  roas            Float     @default(0.0)
+  status          String    @default("ACTIVE") // "ACTIVE", "PAUSED", "REMOVED"
+  platform        String    // "GOOGLE_ADS", "META_ADS"
+  lastSyncedAt    DateTime  @default(now())
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  @@unique([tenantId, platform, campaignId])
+  @@index([tenantId])
+  @@index([adAccountId])
+}
+
+model AdSyncLog {
+  id          String   @id @default(cuid())
+  tenantId    String
+  tenant      Tenant   @relation(fields: [tenantId], references: [id], onDelete: Cascade)
+  platform    String   // "GOOGLE_ADS", "META_ADS", "ALL"
+  status      String   // "SUCCESS", "FAILED"
+  message     String?  // Error message or summary
+  syncedCount Int      @default(0)
+  createdAt   DateTime @default(now())
+
   @@index([tenantId])
 }
 

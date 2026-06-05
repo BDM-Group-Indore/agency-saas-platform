@@ -211,16 +211,19 @@ export default function WhatsAppPage() {
     }
   }, [activeConvId, fetchMessages, conversations]);
 
-  // Poll active chat and conversation feeds every 5 seconds for live flow
+  // Poll active chat, conversation feeds, and broadcasts for live flow
   useEffect(() => {
     const timer = setInterval(() => {
       fetchConversations(true);
       if (activeConvId) {
         fetchMessages(activeConvId, true);
       }
-    }, 5000);
+      if (activeTab === 'broadcasts') {
+        fetchBroadcasts();
+      }
+    }, 3000);
     return () => clearInterval(timer);
-  }, [activeConvId, fetchConversations, fetchMessages]);
+  }, [activeConvId, activeTab, fetchConversations, fetchMessages, fetchBroadcasts]);
 
   // Scroll to bottom of chat screen
   useEffect(() => {

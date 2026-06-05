@@ -89,23 +89,36 @@ export class LeadsService {
       return null;
     }
 
-    // 3. Load-balance: assign to user with fewest active leads
+    // 3. Load-balance: assign to user with fewest active leads.
+    // Single grouped aggregate — one DB round-trip regardless of team size.
     const userIds = targetUsers.map((u) => u.id);
-    const leadCounts = await Promise.all(
-      userIds.map(async (id) => {
-        const count = await this.prisma.lead.count({
-          where: {
-            assignedUserId: id,
-            status: { not: LeadStatus.CONVERTED },
-          },
-        });
-        return { id, count };
-      })
+    const groups = await this.prisma.lead.groupBy({
+      by: ['assignedUserId'],
+      where: {
+        assignedUserId: { in: userIds },
+        status: { not: LeadStatus.CONVERTED },
+      },
+      _count: { _all: true },
+    });
+
+    // Build a count map; users absent from the result have 0 active leads.
+    const countMap = new Map<string, number>(
+      groups.map((g) => [g.assignedUserId as string, g._count._all]),
     );
 
-    leadCounts.sort((a, b) => a.count - b.count);
-    return leadCounts[0]?.id || null;
+    // Pick the user with the lowest count (ties broken by original order).
+    let minCount = Infinity;
+    let assignedId: string | null = null;
+    for (const { id } of targetUsers) {
+      const count = countMap.get(id) ?? 0;
+      if (count < minCount) {
+        minCount = count;
+        assignedId = id;
+      }
+    }
+    return assignedId;
   }
+
 
   async create(dto: CreateLeadDto, tenantId: string) {
     const isDuplicate = await this.checkDuplicate(dto.email, dto.phone, tenantId);

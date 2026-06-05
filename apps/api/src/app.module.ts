@@ -13,6 +13,8 @@ import { BillingModule } from './billing/billing.module';
 import { AnalyticsModule } from './analytics/analytics.module';
 import { AiModule } from './ai/ai.module';
 import { EnterpriseModule } from './enterprise/enterprise.module';
+import { AdsModule } from './ads/ads.module';
+import { HealthModule } from './health/health.module';
 import { TenantContextInterceptor } from './common/interceptors/tenant-context.interceptor';
 import { APP_GUARD } from '@nestjs/core';
 import { CsrfGuard } from './common/guards/csrf.guard';
@@ -40,6 +42,8 @@ import { CsrfGuard } from './common/guards/csrf.guard';
     AnalyticsModule,
     AiModule,
     EnterpriseModule,
+    AdsModule,
+    HealthModule,
   ],
 
   providers: [

@@ -1,4 +1,4 @@
-import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException, UnauthorizedException } from '@nestjs/common';
+import { Injectable, NotFoundException, BadRequestException, ConflictException, ForbiddenException, UnauthorizedException, OnModuleInit, Logger } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import * as crypto from 'crypto';
 import { PrismaService } from '../database/prisma.service';
@@ -19,7 +19,13 @@ import { WhatsAppConversation, WhatsAppMessage, WhatsAppTemplate, WhatsAppBroadc
 
 
 @Injectable()
-export class WhatsappService {
+export class WhatsappService implements OnModuleInit {
+  private readonly logger = new Logger(WhatsappService.name);
+
+  onModuleInit() {
+    this.startQueueWorker();
+  }
+
   constructor(
     private prisma: PrismaService,
     private readonly configService: ConfigService,
@@ -115,7 +121,12 @@ export class WhatsappService {
   }
 
   // 3. Send Message Manually
-  async sendMessage(dto: SendMessageDto, tenantId: string, senderUserId?: string): Promise<WhatsAppMessage> {
+  async sendMessage(
+    dto: SendMessageDto,
+    tenantId: string,
+    senderUserId?: string,
+    broadcastId?: string,
+  ): Promise<WhatsAppMessage> {
     // 1. Check or create conversation
     let conversation = await this.prisma.whatsAppConversation.findFirst({
       where: { phoneNumber: dto.phoneNumber, tenantId },
@@ -137,6 +148,8 @@ export class WhatsappService {
       });
     }
 
+    const providerMessageId = `wamid.${crypto.randomBytes(12).toString('hex')}`;
+
     // 2. Create message record
     const message = await this.prisma.whatsAppMessage.create({
       data: {
@@ -148,6 +161,8 @@ export class WhatsappService {
         status: WhatsAppMessageStatus.SENT,
         templateName: dto.templateName || null,
         mediaUrl: dto.mediaUrl || null,
+        providerMessageId,
+        broadcastId: broadcastId || null,
       },
     });
 
@@ -236,55 +251,25 @@ export class WhatsappService {
         templateId: dto.templateId,
         status: WhatsAppBroadcastStatus.SENDING,
         tenantId,
+        sentCount: 0,
+        deliveredCount: 0,
+        readCount: 0,
+        failedCount: 0,
       },
     });
 
-    // Simulate sending messages sequentially
-    let sent = 0;
-    let delivered = 0;
-    let read = 0;
-    let failed = 0;
+    // Queue the broadcast sending task asynchronously in Redis list
+    const jobPayload = {
+      broadcastId: broadcast.id,
+      phoneNumbers: dto.phoneNumbers,
+      templateId: dto.templateId,
+      tenantId,
+    };
 
-    for (const phone of dto.phoneNumbers) {
-      // Failed numbers check (simulation metric helper)
-      if (phone.startsWith('999') || phone.length < 8) {
-        failed++;
-        continue;
-      }
+    await this.redisService.getClient().lpush('whatsapp:broadcast:queue', JSON.stringify(jobPayload));
+    this.logger.log(`Queued WhatsApp Broadcast Campaign: ${dto.name} (${broadcast.id}) for ${dto.phoneNumbers.length} targets`);
 
-      sent++;
-      // Randomly simulate delivery and read rates for visual dashboard authenticity
-      const rand = Math.random();
-      if (rand > 0.15) {
-        delivered++;
-      }
-      if (rand > 0.4) {
-        read++;
-      }
-
-      // Execute messaging
-      await this.sendMessage(
-        {
-          phoneNumber: phone,
-          body: `[Template: ${template.name}] Hello, thank you for being our valued customer.`,
-          type: WhatsAppMessageType.TEMPLATE,
-          templateName: template.name,
-        },
-        tenantId
-      );
-    }
-
-    // Complete campaign statistics
-    return this.prisma.whatsAppBroadcast.update({
-      where: { id: broadcast.id },
-      data: {
-        status: WhatsAppBroadcastStatus.COMPLETED,
-        sentCount: sent,
-        deliveredCount: delivered,
-        readCount: read,
-        failedCount: failed,
-      },
-    });
+    return broadcast;
   }
 
   // 9. Reusable Dry Helper to process incoming messages and run Bot Engine auto-replies
@@ -415,8 +400,21 @@ export class WhatsappService {
     const entry = body.entry?.[0];
     const change = entry?.changes?.[0];
     const value = change?.value;
-    const message = value?.messages?.[0];
     const metadata = value?.metadata;
+
+    // Acknowledge and process Meta status updates (reconciliation)
+    if (value?.statuses && Array.isArray(value.statuses) && value.statuses.length > 0) {
+      const statusObj = value.statuses[0];
+      const providerMessageId = statusObj.id;
+      const statusValue = statusObj.status; // 'sent', 'delivered', 'read', 'failed'
+
+      if (providerMessageId && statusValue) {
+        await this.processWebhookStatus(providerMessageId, statusValue);
+        return { status: 'status_updated', messageId: providerMessageId };
+      }
+    }
+
+    const message = value?.messages?.[0];
 
     if (!message || !metadata) {
       return { status: 'ignored' };
@@ -455,5 +453,184 @@ export class WhatsappService {
   // 12. Secure simulation route for authorized tenant users
   async simulateWebhook(dto: ReceiveWebhookDto, tenantId: string): Promise<WhatsAppMessage> {
     return this.processInboundMessage(dto.phoneNumber, dto.body, tenantId);
+  }
+
+  // ─── Background Queue Workers & Reconciliation Helpers ──────────────────────
+  private async startQueueWorker() {
+    this.logger.log('Starting WhatsApp Broadcast background queue worker loop...');
+    while (true) {
+      try {
+        const client = this.redisService.getClient();
+        if (client) {
+          const rawJob = await client.rpop('whatsapp:broadcast:queue');
+          if (rawJob) {
+            const job = JSON.parse(rawJob);
+            await this.processBroadcastJob(job);
+          } else {
+            await new Promise((resolve) => setTimeout(resolve, 1000));
+          }
+        } else {
+          await new Promise((resolve) => setTimeout(resolve, 2000));
+        }
+      } catch (err: any) {
+        this.logger.error(`Error in WhatsApp queue worker loop: ${err.message}`, err.stack);
+        await new Promise((resolve) => setTimeout(resolve, 2000));
+      }
+    }
+  }
+
+  private async processBroadcastJob(job: any) {
+    const { broadcastId, phoneNumbers, templateId, tenantId } = job;
+    this.logger.log(`Processing WhatsApp Broadcast Campaign ID: ${broadcastId} for ${phoneNumbers.length} targets`);
+
+    const template = await this.prisma.whatsAppTemplate.findFirst({
+      where: { id: templateId, tenantId },
+    });
+
+    if (!template) {
+      this.logger.error(`Template ${templateId} not found during broadcast ${broadcastId}`);
+      await this.prisma.whatsAppBroadcast.update({
+        where: { id: broadcastId },
+        data: { status: WhatsAppBroadcastStatus.FAILED },
+      });
+      return;
+    }
+
+    let sent = 0;
+    let failed = 0;
+
+    for (const phone of phoneNumbers) {
+      try {
+        if (phone.startsWith('999') || phone.length < 8) {
+          failed++;
+          await this.createFailedBroadcastMessage(phone, template.name, broadcastId, tenantId);
+          continue;
+        }
+
+        const message = await this.fetchWithRetry(() =>
+          this.sendMessage(
+            {
+              phoneNumber: phone,
+              body: `[Template: ${template.name}] Hello, thank you for being our valued customer.`,
+              type: WhatsAppMessageType.TEMPLATE,
+              templateName: template.name,
+            },
+            tenantId,
+            undefined,
+            broadcastId,
+          ),
+        );
+
+        sent++;
+        this.scheduleMockWebhookStatusUpdates(message.providerMessageId!, phone, tenantId, broadcastId);
+
+        await new Promise((resolve) => setTimeout(resolve, 50));
+      } catch (err: any) {
+        this.logger.error(`Failed to send broadcast message to ${phone}: ${err.message}`);
+        failed++;
+      }
+    }
+
+    await this.prisma.whatsAppBroadcast.update({
+      where: { id: broadcastId },
+      data: {
+        status: WhatsAppBroadcastStatus.COMPLETED,
+        sentCount: sent,
+        failedCount: failed,
+      },
+    });
+
+    this.logger.log(`Completed processing Broadcast Campaign ID: ${broadcastId}. Sent: ${sent}, Failed: ${failed}`);
+  }
+
+  private async createFailedBroadcastMessage(phoneNumber: string, templateName: string, broadcastId: string, tenantId: string) {
+    let conversation = await this.prisma.whatsAppConversation.findFirst({
+      where: { phoneNumber, tenantId },
+    });
+    if (!conversation) {
+      conversation = await this.prisma.whatsAppConversation.create({
+        data: {
+          phoneNumber,
+          tenantId,
+          status: WhatsAppConversationStatus.OPEN,
+        },
+      });
+    }
+    await this.prisma.whatsAppMessage.create({
+      data: {
+        conversationId: conversation.id,
+        direction: WhatsAppMessageDirection.OUTBOUND,
+        body: `[Template: ${templateName}] Hello, thank you for being our valued customer.`,
+        type: WhatsAppMessageType.TEMPLATE,
+        status: WhatsAppMessageStatus.FAILED,
+        templateName,
+        broadcastId,
+      },
+    });
+  }
+
+  async processWebhookStatus(providerMessageId: string, statusValue: string) {
+    const message = await this.prisma.whatsAppMessage.findUnique({
+      where: { providerMessageId },
+    });
+
+    if (!message) {
+      this.logger.warn(`Received status update for unknown provider message ID: ${providerMessageId}`);
+      return;
+    }
+
+    const uppercaseStatus = statusValue === 'delivered' ? WhatsAppMessageStatus.DELIVERED :
+                            statusValue === 'read' ? WhatsAppMessageStatus.READ :
+                            statusValue === 'failed' ? WhatsAppMessageStatus.FAILED : 
+                            WhatsAppMessageStatus.SENT;
+
+    await this.prisma.whatsAppMessage.update({
+      where: { id: message.id },
+      data: { status: uppercaseStatus },
+    });
+
+    if (message.broadcastId) {
+      const updateField = statusValue === 'delivered' ? 'deliveredCount' : 
+                          statusValue === 'read' ? 'readCount' : 
+                          statusValue === 'failed' ? 'failedCount' : null;
+      if (updateField) {
+        await this.prisma.whatsAppBroadcast.update({
+          where: { id: message.broadcastId },
+          data: { [updateField]: { increment: 1 } },
+        });
+      }
+    }
+  }
+
+  private scheduleMockWebhookStatusUpdates(providerMessageId: string, phoneNumber: string, tenantId: string, broadcastId: string) {
+    setTimeout(async () => {
+      try {
+        await this.processWebhookStatus(providerMessageId, 'delivered');
+      } catch (err: any) {
+        this.logger.error(`Error in mock delivered status webhook update: ${err.message}`);
+      }
+    }, 1500);
+
+    if (Math.random() > 0.15) {
+      setTimeout(async () => {
+        try {
+          await this.processWebhookStatus(providerMessageId, 'read');
+        } catch (err: any) {
+          this.logger.error(`Error in mock read status webhook update: ${err.message}`);
+        }
+      }, 3500);
+    }
+  }
+
+  // Rate-limiting and retry handler wrapper (Exponential backoff)
+  private async fetchWithRetry<T>(fn: () => Promise<T>, retries = 3, delay = 1000): Promise<T> {
+    try {
+      return await fn();
+    } catch (err: any) {
+      if (retries <= 0) throw err;
+      this.logger.warn(`API call failed: ${err.message}. Retrying in ${delay}ms...`);
+      await new Promise((resolve) => setTimeout(resolve, delay));
+      return this.fetchWithRetry(fn, retries - 1, delay * 2);
+    }
   }
 }

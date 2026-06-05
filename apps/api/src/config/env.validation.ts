@@ -51,6 +51,33 @@ class EnvironmentVariables {
   @IsString()
   @IsOptional()
   CORS_ALLOWED_ORIGINS?: string;
+
+  @IsString()
+  @IsOptional()
+  GOOGLE_CLIENT_ID?: string;
+
+  @IsString()
+  @IsOptional()
+  GOOGLE_CLIENT_SECRET?: string;
+
+  @IsString()
+  @IsOptional()
+  GOOGLE_REDIRECT_URI?: string;
+
+  @IsString()
+  @IsOptional()
+  META_CLIENT_ID?: string;
+
+  @IsString()
+  @IsOptional()
+  META_CLIENT_SECRET?: string;
+
+  @IsString()
+  @IsOptional()
+  META_REDIRECT_URI?: string;
+
+  @IsString()
+  MFA_ENCRYPTION_KEY: string; // 32-byte hex key for AES-256-GCM encryption of TOTP secrets
 }
 
 export function validate(config: Record<string, any>) {

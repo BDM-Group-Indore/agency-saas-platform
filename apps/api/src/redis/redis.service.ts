@@ -44,4 +44,14 @@ export class RedisService implements OnModuleInit, OnModuleDestroy {
   async del(key: string): Promise<number> {
     return this.client.del(key);
   }
+
+  /** Increment a counter key and return the new value. */
+  async incr(key: string): Promise<number> {
+    return this.client.incr(key);
+  }
+
+  /** Set a key's TTL in seconds (used after INCR to create a sliding window). */
+  async expire(key: string, ttlSeconds: number): Promise<void> {
+    await this.client.expire(key, ttlSeconds);
+  }
 }

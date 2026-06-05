@@ -92,6 +92,9 @@ export class PrismaService extends PrismaClient implements OnModuleInit, OnModul
       { name: 'PaymentTransaction', column: 'tenantId' },
       { name: 'TenantSubscription', column: 'tenantId' },
       { name: 'PromptTemplate', column: 'tenantId' },
+      { name: 'AdAccount', column: 'tenantId' },
+      { name: 'AdCampaign', column: 'tenantId' },
+      { name: 'AdSyncLog', column: 'tenantId' },
       { name: 'Tenant', column: 'id' }
     ];
 

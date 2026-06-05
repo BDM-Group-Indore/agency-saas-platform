@@ -9,18 +9,88 @@ secrets:
 
 services:
 
-  # ─── PostgreSQL ─────────────────────────────────────────────────────────────
+  # ─── NestJS API ──────────────────────────────────────────────────────────────
+  api:
+    build:
+      context: .
+      dockerfile: apps/api/Dockerfile
+    container_name: billing_api
+    restart: always
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+    networks:
+      - app_network
+    depends_on:
+      postgres:
+        condition: service_healthy
+      mongodb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3000/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "1.0"
+          memory: 512M
+        reservations:
+          cpus: "0.25"
+          memory: 128M
+
+  # ─── Next.js Web App ─────────────────────────────────────────────────────────
+  web:
+    build:
+      context: .
+      dockerfile: apps/web/Dockerfile
+    container_name: billing_web
+    restart: always
+    env_file: .env
+    environment:
+      NODE_ENV: production
+      PORT: "3001"
+      NEXT_PUBLIC_API_URL: "http://nginx/api"
+    networks:
+      - app_network
+    depends_on:
+      api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:3001"]
+      interval: 15s
+      timeout: 5s
+      retries: 5
+      start_period: 30s
+    deploy:
+      resources:
+        limits:
+          cpus: "0.5"
+          memory: 512M
+        reservations:
+          cpus: "0.1"
+          memory: 128M
+
+
+  # ─── PostgreSQL ──────────────────────────────────────────────────────────────
   postgres:
     image: postgres:17
     container_name: billing_postgres
     restart: always
     user: "999:999"
+    networks:
+      - app_network
     environment:
       POSTGRES_USER: postgres
       POSTGRES_PASSWORD: postgres
       POSTGRES_DB: billing_software
     ports:
-      - "5433:5432"
+      - "127.0.0.1:5433:5432"  # localhost-only: prevents remote host access
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -43,8 +113,10 @@ services:
     image: mongo:7.0
     container_name: billing_mongodb
     restart: always
+    networks:
+      - app_network
     ports:
-      - '27017:27017'
+      - '127.0.0.1:27017:27017'  # localhost-only: prevents remote host access
     volumes:
       - mongo_data:/data/db
     healthcheck:
@@ -68,9 +140,11 @@ services:
     container_name: billing_redis
     restart: always
     user: "999:999"
+    networks:
+      - app_network
     command: redis-server --save 60 1 --loglevel warning --requirepass ${REDIS_PASSWORD:-changeme_in_prod}
     ports:
-      - '6379:6379'
+      - '127.0.0.1:6379:6379'  # localhost-only: prevents remote host access
     volumes:
       - redis_data:/data
     healthcheck:
@@ -93,13 +167,15 @@ services:
     image: clickhouse/clickhouse-server:24.3-alpine
     container_name: billing_clickhouse
     restart: always
+    networks:
+      - app_network
     environment:
       - CLICKHOUSE_DB=default
       - CLICKHOUSE_USER=default
       - CLICKHOUSE_PASSWORD=${CLICKHOUSE_PASSWORD:-}
     ports:
-      - '8123:8123'
-      - '9000:9000'
+      - '127.0.0.1:8123:8123'  # HTTP interface — localhost-only
+      - '127.0.0.1:9000:9000'  # native TCP interface — localhost-only
     ulimits:
       nofile:
         soft: 262144
@@ -126,6 +202,8 @@ services:
     image: nginx:1.27-alpine
     container_name: billing_nginx
     restart: always
+    networks:
+      - app_network
     ports:
       - "80:80"
       - "443:443"
@@ -136,6 +214,8 @@ services:
       - postgres
       - mongodb
       - redis
+      - api
+      - web
     healthcheck:
       test: ["CMD", "nginx", "-t"]
       interval: 30s
@@ -155,3 +235,8 @@ volumes:
   mongo_data:
   redis_data:
   clickhouse_data:
+
+networks:
+  app_network:
+    driver: bridge
+    name: billing_app_network

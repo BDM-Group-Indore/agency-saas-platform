@@ -284,10 +284,10 @@ resource "aws_ecs_task_definition" "dr_api" {
     name      = "api"
     image     = var.api_image
     essential = true
-    portMappings = [{ containerPort = 3001, protocol = "tcp" }]
+    portMappings = [{ containerPort = 3000, protocol = "tcp" }]
     environment = [
       { name = "NODE_ENV", value = var.environment },
-      { name = "PORT",     value = "3001" },
+      { name = "PORT",     value = "3000" },
       { name = "DATABASE_URL",
         value = "postgresql://adpulse_admin:${var.db_password}@${aws_db_instance.dr_replica.address}:5432/adpulse" },
       { name = "REDIS_URL",
@@ -317,7 +317,7 @@ resource "aws_ecs_task_definition" "dr_web" {
     name      = "web"
     image     = var.web_image
     essential = true
-    portMappings = [{ containerPort = 3000, protocol = "tcp" }]
+    portMappings = [{ containerPort = 3001, protocol = "tcp" }]
     environment = [
       { name = "NODE_ENV",            value = var.environment },
       { name = "NEXT_PUBLIC_API_URL", value = "https://api.adpulse.io" },
@@ -356,7 +356,7 @@ resource "aws_ecs_service" "dr_api" {
   load_balancer {
     target_group_arn = aws_lb_target_group.dr_api.arn
     container_name   = "api"
-    container_port   = 3001
+    container_port   = 3000
   }
 
   deployment_circuit_breaker { enable = true; rollback = true }
@@ -386,7 +386,7 @@ resource "aws_ecs_service" "dr_web" {
   load_balancer {
     target_group_arn = aws_lb_target_group.dr_web.arn
     container_name   = "web"
-    container_port   = 3000
+    container_port   = 3001
   }
 
   lifecycle { ignore_changes = [desired_count] }
@@ -409,7 +409,7 @@ resource "aws_lb" "dr" {
 resource "aws_lb_target_group" "dr_api" {
   provider    = aws.dr
   name        = "adpulse-dr-api-tg"
-  port        = 3001
+  port        = 3000
   protocol    = "HTTP"
   vpc_id      = aws_vpc.dr.id
   target_type = "ip"
@@ -426,7 +426,7 @@ resource "aws_lb_target_group" "dr_api" {
 resource "aws_lb_target_group" "dr_web" {
   provider    = aws.dr
   name        = "adpulse-dr-web-tg"
-  port        = 3000
+  port        = 3001
   protocol    = "HTTP"
   vpc_id      = aws_vpc.dr.id
   target_type = "ip"

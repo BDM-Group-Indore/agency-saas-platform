@@ -329,7 +329,7 @@ resource "aws_lb" "main" {
 
 resource "aws_lb_target_group" "api" {
   name        = "adpulse-api-tg"
-  port        = 3001
+  port        = 3000
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
   target_type = "ip"
@@ -345,7 +345,7 @@ resource "aws_lb_target_group" "api" {
 
 resource "aws_lb_target_group" "web" {
   name        = "adpulse-web-tg"
-  port        = 3000
+  port        = 3001
   protocol    = "HTTP"
   vpc_id      = aws_vpc.main.id
   target_type = "ip"
@@ -389,12 +389,12 @@ resource "aws_ecs_task_definition" "api" {
     image     = var.api_image
     essential = true
     portMappings = [{
-      containerPort = 3001
+      containerPort = 3000
       protocol      = "tcp"
     }]
     environment = [
       { name = "NODE_ENV",      value = var.environment },
-      { name = "PORT",          value = "3001" },
+      { name = "PORT",          value = "3000" },
       { name = "DATABASE_URL",  value = "postgresql://adpulse_admin:${var.db_password}@${aws_db_instance.postgres.address}:5432/adpulse" },
       { name = "REDIS_URL",     value = "rediss://${aws_elasticache_replication_group.redis.primary_endpoint_address}:6379" },
     ]
@@ -422,7 +422,7 @@ resource "aws_ecs_task_definition" "web" {
     image     = var.web_image
     essential = true
     portMappings = [{
-      containerPort = 3000
+      containerPort = 3001
       protocol      = "tcp"
     }]
     environment = [
@@ -463,7 +463,7 @@ resource "aws_ecs_service" "api" {
   load_balancer {
     target_group_arn = aws_lb_target_group.api.arn
     container_name   = "api"
-    container_port   = 3001
+    container_port   = 3000
   }
 
   deployment_controller { type = "ECS" }
@@ -495,7 +495,7 @@ resource "aws_ecs_service" "web" {
   load_balancer {
     target_group_arn = aws_lb_target_group.web.arn
     container_name   = "web"
-    container_port   = 3000
+    container_port   = 3001
   }
 
   deployment_circuit_breaker {

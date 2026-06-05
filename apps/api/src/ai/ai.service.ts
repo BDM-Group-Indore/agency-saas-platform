@@ -62,12 +62,17 @@ export class AiService {
       throw new BadRequestException('Failed to initialize conversation');
     }
 
-    // Save User message
+    // Save User message — include tenantId/userId for direct isolation
+    const RETENTION_DAYS = 90;
+    const expiresAt = new Date(Date.now() + RETENTION_DAYS * 24 * 60 * 60 * 1000);
 
     await this.messageModel.create({
       conversationId: convo.id,
+      tenantId,
+      userId,
       role: 'user',
       content: userMessage,
+      expiresAt,
     });
 
     // Fetch conversation history
@@ -79,8 +84,11 @@ export class AiService {
     // Save Assistant message
     await this.messageModel.create({
       conversationId: convo.id,
+      tenantId,
+      userId,
       role: 'assistant',
       content: reply,
+      expiresAt,
     });
 
     return {
@@ -95,10 +103,15 @@ export class AiService {
   }
 
   async getMessages(conversationId: string, tenantId: string): Promise<AiMessage[]> {
+    // Verify the conversation belongs to this tenant before returning messages
     const convo = await this.conversationModel.findOne({ _id: conversationId, tenantId });
     if (!convo) throw new NotFoundException(`Conversation ${conversationId} not found`);
 
-    return this.messageModel.find({ conversationId }).sort({ createdAt: 1 });
+    // Filter messages directly on tenantId — no cross-tenant leakage even if
+    // conversationId is guessed or the conversation row is missing.
+    return this.messageModel
+      .find({ conversationId, tenantId })
+      .sort({ createdAt: 1 });
   }
 
   async deleteConversation(conversationId: string, tenantId: string): Promise<void> {
@@ -107,7 +120,8 @@ export class AiService {
 
     await Promise.all([
       this.conversationModel.deleteOne({ _id: conversationId }),
-      this.messageModel.deleteMany({ conversationId }),
+      // Delete messages scoped by tenantId — belt-and-suspenders isolation
+      this.messageModel.deleteMany({ conversationId, tenantId }),
     ]);
   }
 
